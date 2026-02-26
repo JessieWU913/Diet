@@ -5,6 +5,9 @@
 .env.*
 *.pem
 *.key
+*.log
+.cache/
+.secret_config
 
 # =========================
 # Backend (Django / Python)
