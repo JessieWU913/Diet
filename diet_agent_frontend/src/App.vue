@@ -1,63 +1,48 @@
-<script setup>
-import { RouterView } from 'vue-router'
-// 引入上一轮写好的导航栏组件
-import NavBar from '@/components/NavBar.vue'
-</script>
-
 <template>
-  <div class="app-layout">
+  <div id="app">
     <NavBar />
 
     <main class="main-content">
-      <RouterView v-slot="{ Component }">
+      <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />
         </transition>
-      </RouterView>
+      </router-view>
     </main>
   </div>
 </template>
 
+<script setup>
+import NavBar from './components/NavBar.vue'
+</script>
+
 <style>
-/* --- 全局样式重置 --- */
-body {
+/* 全局基础样式清空 */
+html, body {
   margin: 0;
   padding: 0;
-  font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
-  background-color: #f5f7fa; /* 统一浅灰背景，突出卡片 */
-  color: #303133;
-  -webkit-font-smoothing: antialiased;
+  background-color: #f4f7f6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  height: 100vh;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-/* 链接无下划线 */
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-/* --- 布局样式 --- */
-.app-layout {
-  min-height: 100vh;
+#app {
   display: flex;
   flex-direction: column;
+  height: 100vh;
 }
 
 .main-content {
-  flex: 1; /* 让内容区撑满剩余高度 */
-  width: 100%;
-  /* 如果你的 NavBar 高度是 80px，这里不需要 margin-top，因为 NavBar 是 position: sticky */
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
 }
 
-/* --- 过渡动画 (可选) --- */
+/* 简单的路由切换动画 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
-
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;

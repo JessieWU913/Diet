@@ -2,108 +2,184 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from langchain_core.messages import HumanMessage
+import uuid
 
-# 引入我们写好的 LangGraph Agent 大脑
 from .graph import app
-# 引入 Neo4j 数据库驱动 (用于用户画像存取)
 from .neo4j_service import graph_db
 
 
 # ==========================================
-# 1. 聊天对话接口
+# 1. 用户注册与登录接口)
 # ==========================================
-class AgentChatView(APIView):
+class UserAuthView(APIView):
     def post(self, request):
-        # 解析前端传来的数据
-        user_query = request.data.get("query", "")
-        user_mode = request.data.get("mode", "standard")
+        action = request.data.get("action")
+        username = request.data.get("username")
+        password = request.data.get("password")
 
-        # 获取 session_id，用于 LangGraph 的短期记忆 (MemorySaver)
-        # 实际项目中由前端生成或通过 token 解析，这里默认给一个测试 ID
-        session_id = request.data.get("session_id", "xiaowu_session_001")
+        if action == "register":
+            # 检查是否已存在
+            check_cypher = "MATCH (u:User {username: $username}) RETURN u"
+            if graph_db.query(check_cypher, {"username": username}):
+                return Response({"error": "用户名已存在"}, status=400)
 
-        print(f"View层收到: query={user_query}, mode={user_mode}, session_id={session_id}")
+            user_id = str(uuid.uuid4())
+            create_cypher = """
+            CREATE (u:User {
+                id: $user_id, username: $username, password: $password,
+                name: $username, allergies: [], dislikes: []
+            }) RETURN u.id AS user_id
+            """
+            result = graph_db.query(create_cypher, {"user_id": user_id, "username": username, "password": password})
+            return Response({"status": "success", "user_id": result[0]["user_id"]})
 
-        if not user_query:
-            return Response({"error": "Query is required"}, status=400)
-
-        # 构造图谱输入数据
-        inputs = {
-            "messages": [HumanMessage(content=user_query)],
-            "user_mode": user_mode,
-            "reflection_count": 0  # 初始化反思计数器
-        }
-
-        config = {"configurable": {"thread_id": session_id}}
-
-        try:
-            print(f"正在调用 Agent 引擎...")
-            # 注意这里多传了一个 config 参数
-            result = app.invoke(inputs, config=config)
-
-            # 提取最终回复
-            final_response = result['messages'][-1].content
-
-            return Response({
-                "response": final_response,
-            })
-        except Exception as e:
-            print(f"Agent Error: {e}")
-            return Response({"error": str(e)}, status=500)
+        elif action == "login":
+            login_cypher = "MATCH (u:User {username: $username, password: $password}) RETURN u.id AS user_id, u.name AS name"
+            result = graph_db.query(login_cypher, {"username": username, "password": password})
+            if result:
+                return Response({"status": "success", "user_id": result[0]["user_id"], "name": result[0]["name"]})
+            return Response({"error": "账号或密码错误"}, status=401)
 
 
 # ==========================================
-# 2. 用户资料接口 (处理身高体重、忌口过敏等)
+# 2. 用户资料填写接口
 # ==========================================
 class UserProfileView(APIView):
     def get(self, request):
-        """获取当前用户的个人资料与图谱偏好"""
-        user_id = request.query_params.get("user_id", "xiaowu_001")
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return Response({"error": "缺少 user_id"}, status=400)
 
         cypher = """
         MATCH (u:User {id: $user_id})
-        RETURN u.name AS name, u.gender AS gender, u.birthday AS birthday,
-               u.height AS height, u.weight AS weight, 
+        RETURN u.gender AS gender, u.height AS height, u.weight AS weight, 
                u.allergies AS allergies, u.dislikes AS dislikes
         """
         try:
             result = graph_db.query(cypher, {"user_id": user_id})
             if result:
                 return Response({"status": "success", "data": result[0]})
-            return Response({"status": "not_found", "data": {}})
+            return Response({"status": "success", "data": {}})
         except Exception as e:
-            print(f"Profile Get Error: {e}")
-            return Response({"status": "error", "message": str(e)}, status=500)
+            return Response({"error": str(e)}, status=500)
 
     def post(self, request):
-        """保存前端修改的用户资料到 Neo4j"""
         data = request.data
-        user_id = data.get("user_id", "xiaowu_001")
+        user_id = data.get("user_id")
 
-        # 使用 MERGE 确保用户存在，并更新其属性
+        # 忌口数组保存到 Neo4j 的 User 节点中
         cypher = """
-        MERGE (u:User {id: $user_id})
-        SET u.name = $name,
-            u.gender = $gender,
-            u.birthday = $birthday,
-            u.height = toFloat($height),
+        MATCH (u:User {id: $user_id})
+        SET u.height = toFloat($height),
             u.weight = toFloat($weight),
             u.allergies = $allergies,
-            u.dislikes = $dislikes
+            u.dislikes = $dislikes,
+            u.gender = $gender
         RETURN u
         """
         try:
             graph_db.query(cypher, {
                 "user_id": user_id,
-                "name": data.get("name", ""),
-                "gender": data.get("gender", "female"),
-                "birthday": data.get("birthday", ""),
                 "height": data.get("height", 0),
                 "weight": data.get("weight", 0),
                 "allergies": data.get("allergies", []),
-                "dislikes": data.get("dislikes", [])
+                "dislikes": data.get("dislikes", []),
+                "gender": data.get("gender", "female")
             })
-            return Response({"status": "success", "message": "资料已保存入知识图谱"})
+            return Response({"status": "success", "message": "个人信息已更新"})
         except Exception as e:
-            print(f"Profile Post Error: {e}")
-            return Response({"status": "error", "message": str(e)}, status=500)
+            return Response({"error": str(e)}, status=500)
+
+
+# ==========================================
+# 3. 聊天接口
+# ==========================================
+class AgentChatView(APIView):
+    def post(self, request):
+        user_query = request.data.get("query", "")
+        user_mode = request.data.get("mode", "standard")
+        user_id = request.data.get("user_id")  # 前端必须传当前登录的 user_id
+        session_id = request.data.get("session_id", f"session_{user_id}")
+
+        user_profile = {}
+        if user_id:
+            profile_cypher = """
+                        MATCH (u:User {id: $user_id})
+                        RETURN u.name AS name, u.weight AS weight, u.height AS height, u.gender AS gender,
+                               u.allergies AS allergies, u.dislikes AS dislikes,
+                               coalesce(u.negative_feedback, []) AS negative_feedback
+                        """
+            profile_result = graph_db.query(profile_cypher, {"user_id": user_id})
+            if profile_result:
+                user_profile = profile_result[0]
+
+        # 构造带有 user_profile 的图谱输入数据
+        inputs = {
+            "messages": [HumanMessage(content=user_query)],
+            "user_mode": user_mode,
+            "reflection_count": 0,
+            "user_profile": user_profile  # <--- 自动注入！
+        }
+
+        config = {"configurable": {"thread_id": session_id}}
+
+        try:
+            result = app.invoke(inputs, config=config)
+            return Response({"response": result['messages'][-1].content})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+# ==========================================
+# 用户负面反馈收集接口 (RLHF机制)
+# ==========================================
+class FeedbackView(APIView):
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        reason = request.data.get("reason")
+        content = request.data.get("content", "") # 大模型原本的回答
+
+        if not user_id or not reason:
+            return Response({"error": "参数不完整"}, status=400)
+
+        # 构造黑名单记忆（提取原回答的前40个字作为上下文关联）
+        memory_entry = f"【不满意原因】：{reason}。（当时的失败推荐内容：{content[:40]}...）"
+
+        # Cypher: 如果数组不存在就初始化为空数组，然后把新反馈追加进去
+        cypher = """
+        MATCH (u:User {id: $user_id})
+        SET u.negative_feedback = coalesce(u.negative_feedback, []) + $memory_entry
+        RETURN u.negative_feedback
+        """
+        try:
+            graph_db.query(cypher, {"user_id": user_id, "memory_entry": memory_entry})
+            return Response({"status": "success", "message": "反思记忆已写入图谱"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+# agent/views.py 追加以下代码
+
+class RecipeDetailView(APIView):
+    """
+    [前端专用接口] 传入菜名列表，返回图谱中真实的完整菜谱数据
+    """
+    def post(self, request):
+        names = request.data.get("names", [])
+        if not names:
+            return Response({"error": "未提供菜名"}, status=400)
+
+        # 在数据库里精准匹配这些菜名，把真实数据捞出来
+        cypher = """
+        MATCH (n:Recipe)
+        WHERE n.name IN $names
+        RETURN n.name AS name, 
+               n.calories AS calories,
+               n.ingredients_raw AS ingredients,
+               n.steps AS steps
+        """
+        try:
+            results = graph_db.query(cypher, {"names": names})
+            return Response({"status": "success", "data": results})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
