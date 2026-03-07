@@ -10,8 +10,9 @@ const routes = [
   { path: '/', name: 'Home', component: HomeView }, // 暂时把首页设为对话页
   { path: '/chat', name: 'Chat', component: HomeView },
   { path: '/meal', name: 'Meal', component: MealView },
-  { path: '/stats', name: 'Stats', component: HomeView }, // 占位
-  { path: '/profile', name: 'Profile', component: ProfileView }
+  { path: '/stats', name: 'Stats', component: HomeView },
+  { path: '/profile', name: 'Profile', component: ProfileView },
+  { path: '/profile', name: 'Profile', component: ProfileView },
 ]
 
 const router = createRouter({
