@@ -1,16 +1,16 @@
-# agent/views.py
+from langchain_core.utils import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from langchain_core.messages import HumanMessage
-import uuid
+
+from .memory.manager import MemoryManager
+from .memory.semantic import SemanticMemory
+from .memory.episodic import EpisodicMemory
 
 from .graph import app
 from .neo4j_service import graph_db
 
-
-# ==========================================
-# 1. 用户注册与登录接口)
-# ==========================================
+# 用户注册与登录接口
 class UserAuthView(APIView):
     def post(self, request):
         action = request.data.get("action")
@@ -40,10 +40,7 @@ class UserAuthView(APIView):
                 return Response({"status": "success", "user_id": result[0]["user_id"], "name": result[0]["name"]})
             return Response({"error": "账号或密码错误"}, status=401)
 
-
-# ==========================================
-# 2. 用户资料填写接口
-# ==========================================
+# 用户资料填写接口
 class UserProfileView(APIView):
     def get(self, request):
         user_id = request.query_params.get("user_id")
@@ -53,7 +50,7 @@ class UserProfileView(APIView):
         cypher = """
         MATCH (u:User {id: $user_id})
         RETURN u.gender AS gender, u.height AS height, u.weight AS weight, 
-               u.allergies AS allergies, u.dislikes AS dislikes
+               u.allergies AS allergies, u.dislikes AS dislikes, u.birth_date AS birthDate
         """
         try:
             result = graph_db.query(cypher, {"user_id": user_id})
@@ -66,6 +63,7 @@ class UserProfileView(APIView):
     def post(self, request):
         data = request.data
         user_id = data.get("user_id")
+        birth_date = request.data.get('birthDate')
 
         # 忌口数组保存到 Neo4j 的 User 节点中
         cypher = """
@@ -74,6 +72,7 @@ class UserProfileView(APIView):
             u.weight = toFloat($weight),
             u.allergies = $allergies,
             u.dislikes = $dislikes,
+            u.birth_date = $birth_date,
             u.gender = $gender
         RETURN u
         """
@@ -90,35 +89,22 @@ class UserProfileView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
-
-# ==========================================
-# 3. 聊天接口
-# ==========================================
+# 聊天接口
 class AgentChatView(APIView):
     def post(self, request):
         user_query = request.data.get("query", "")
         user_mode = request.data.get("mode", "standard")
-        user_id = request.data.get("user_id")  # 前端必须传当前登录的 user_id
+        user_id = request.data.get("user_id")
         session_id = request.data.get("session_id", f"session_{user_id}")
 
-        user_profile = {}
-        if user_id:
-            profile_cypher = """
-                        MATCH (u:User {id: $user_id})
-                        RETURN u.name AS name, u.weight AS weight, u.height AS height, u.gender AS gender,
-                               u.allergies AS allergies, u.dislikes AS dislikes,
-                               coalesce(u.negative_feedback, []) AS negative_feedback
-                        """
-            profile_result = graph_db.query(profile_cypher, {"user_id": user_id})
-            if profile_result:
-                user_profile = profile_result[0]
+        user_profile = SemanticMemory.get_user_profile(user_id) if user_id else {}
 
-        # 构造带有 user_profile 的图谱输入数据
         inputs = {
             "messages": [HumanMessage(content=user_query)],
             "user_mode": user_mode,
             "reflection_count": 0,
-            "user_profile": user_profile  # <--- 自动注入！
+            "user_profile": user_profile,
+            "user_id": user_id
         }
 
         config = {"configurable": {"thread_id": session_id}}
@@ -129,36 +115,22 @@ class AgentChatView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
-
-# ==========================================
-# 用户负面反馈收集接口 (RLHF机制)
-# ==========================================
+# 用户负面反馈收集接口
 class FeedbackView(APIView):
     def post(self, request):
         user_id = request.data.get("user_id")
         reason = request.data.get("reason")
-        content = request.data.get("content", "") # 大模型原本的回答
+        content = request.data.get("content", "")
 
         if not user_id or not reason:
             return Response({"error": "参数不完整"}, status=400)
 
-        # 构造黑名单记忆（提取原回答的前40个字作为上下文关联）
-        memory_entry = f"【不满意原因】：{reason}。（当时的失败推荐内容：{content[:40]}...）"
+        success = MemoryManager.save_user_feedback(user_id, reason, content)
 
-        # Cypher: 如果数组不存在就初始化为空数组，然后把新反馈追加进去
-        cypher = """
-        MATCH (u:User {id: $user_id})
-        SET u.negative_feedback = coalesce(u.negative_feedback, []) + $memory_entry
-        RETURN u.negative_feedback
-        """
-        try:
-            graph_db.query(cypher, {"user_id": user_id, "memory_entry": memory_entry})
+        if success:
             return Response({"status": "success", "message": "反思记忆已写入图谱"})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-
-# agent/views.py 追加以下代码
+        else:
+            return Response({"error": "记忆写入失败，请检查数据库连接"}, status=500)
 
 class RecipeDetailView(APIView):
     """
@@ -183,3 +155,20 @@ class RecipeDetailView(APIView):
             return Response({"status": "success", "data": results})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+class MealEventView(APIView):
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        date_str = request.data.get("date") # 比如 2026-03-06
+        recipe_names = request.data.get("recipe_names", []) # 传个数组 ['西红柿炒蛋', '米饭']
+
+        success = EpisodicMemory.record_meal_event(user_id, recipe_names, date_str)
+        if success:
+            return Response({"status": "success", "message": "已记入饮食历史档案！"})
+        return Response({"error": "记录失败"}, status=500)
+
+    def get(self, request):
+        user_id = request.query_params.get("user_id")
+        # 提取过去 14 天的记录发给前端
+        history = EpisodicMemory.get_recent_meals(user_id, days_limit=14)
+        return Response({"history": history})

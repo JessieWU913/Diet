@@ -66,6 +66,11 @@
       </div>
 
       <div class="form-group">
+        <label>🎂 出生日期</label>
+        <input type="date" v-model="profile.birthDate" class="form-control" />
+      </div>
+
+      <div class="form-group">
         <label>过敏源 (Allergies)</label>
         <p class="hint">输入后按 <b>回车</b> 或 <b>空格</b> 生成标签</p>
         <div class="tags-input-container" @click="focusInput('allergiesInput')">

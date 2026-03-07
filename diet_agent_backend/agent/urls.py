@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AgentChatView, UserProfileView, UserAuthView, FeedbackView, RecipeDetailView
+from .views import AgentChatView, UserProfileView, UserAuthView, FeedbackView, RecipeDetailView, MealEventView
 
 urlpatterns = [
     path('chat/', AgentChatView.as_view(), name='chat'),
@@ -7,4 +7,5 @@ urlpatterns = [
     path('auth/', UserAuthView.as_view(), name='auth'),
     path('feedback/', FeedbackView.as_view(), name='feedback'),
     path('recipe/', RecipeDetailView.as_view(), name='recipe'),
+    path('api/meal-event/', MealEventView.as_view()),
 ]

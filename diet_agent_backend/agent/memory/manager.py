@@ -1,7 +1,7 @@
 # agent/memory/manager.py
 from .semantic import SemanticMemory
 from .working import WorkingMemory
-
+from .episodic import EpisodicMemory
 
 class MemoryManager:
     """
@@ -37,6 +37,13 @@ class MemoryManager:
             prompt_lines.append("\n【长期记忆 - 历史教训】：")
             prompt_lines.append("该用户曾对你的推荐给出过极度不满的负面反馈。在本次对话中，你必须主动避开以下雷区：")
             prompt_lines.append(recent_lessons)
+
+        recent_meals = EpisodicMemory.get_recent_meals(user_id, days_limit=3)
+        if recent_meals:
+            prompt_lines.append("\n【情景记忆 - 近期饮食记录】：")
+            prompt_lines.append("为了保证饮食多样性，以下是用户近期的菜谱安排：")
+            prompt_lines.extend([f"- {meal}" for meal in recent_meals])
+            prompt_lines.append("请在本次推荐中尽量避开上述最近吃过的菜品，推荐一些新鲜的搭配！")
 
         return "\n".join(prompt_lines)
 
