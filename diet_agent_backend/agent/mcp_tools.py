@@ -88,9 +88,7 @@ def search_recipe_by_ingredients(ingredients: list[str], strict_mode: bool = Fal
         n.steps CONTAINS ing
     )
     {strict_filter}
-    {order_logic if not strict_mode else ""}
-    // 如果是减脂模式，由于前面没有 WITH 聚合，我们直接在这里 ORDER BY
-    {order_logic if strict_mode else ""}
+    {order_logic}
     RETURN 
         n.name AS name, 
         n.calories AS calories, 

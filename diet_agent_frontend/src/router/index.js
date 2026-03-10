@@ -1,23 +1,39 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import ProfileView from '../views/ProfileView.vue'
-import MealView from '../views/MealView.vue'
-// 预留热量统计页 (如果你还没建文件，可以先让它指向 HomeView，或者建个空的 StatsView.vue)
-// import StatsView from '../views/StatsView.vue'
+
+import LoginView from '../views/LoginView.vue'
+import DietLogView from '../views/DietLogView.vue'
+import RecipeView from '../views/RecipeView.vue'
+import StatsView from '../views/StatsView.vue'
+import ChatView from '../views/ChatView.vue'
+import HealthLogView from '../views/HealthLogView.vue'
+import FavoritesView from '../views/FavoritesView.vue'
 
 const routes = [
-  { path: '/', name: 'Home', component: HomeView }, // 暂时把首页设为对话页
-  { path: '/chat', name: 'Chat', component: HomeView },
-  { path: '/meal', name: 'Meal', component: MealView },
-  { path: '/stats', name: 'Stats', component: HomeView },
-  { path: '/profile', name: 'Profile', component: ProfileView },
-  { path: '/profile', name: 'Profile', component: ProfileView },
+  { path: '/', redirect: '/diet-log' },
+  { path: '/login', name: 'Login', component: LoginView },
+  { path: '/diet-log', name: 'DietLog', component: DietLogView, meta: { requiresAuth: true } },
+  { path: '/recipes', name: 'Recipes', component: RecipeView, meta: { requiresAuth: true } },
+  { path: '/stats', name: 'Stats', component: StatsView, meta: { requiresAuth: true } },
+  { path: '/chat', name: 'Chat', component: ChatView, meta: { requiresAuth: true } },
+  { path: '/health-log', name: 'HealthLog', component: HealthLogView, meta: { requiresAuth: true } },
+  { path: '/favorites', name: 'Favorites', component: FavoritesView, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  const isAuthenticated = localStorage.getItem('user_id')
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next({ name: 'Login' })
+  } else if (to.name === 'Login' && isAuthenticated) {
+    next({ name: 'DietLog' })
+  } else {
+    next()
+  }
 })
 
 export default router

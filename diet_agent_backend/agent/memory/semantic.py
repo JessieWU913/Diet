@@ -16,7 +16,8 @@ class SemanticMemory:
         MATCH (u:User {id: $user_id})
         RETURN u.name AS name, u.weight AS weight, u.height AS height, u.gender AS gender,
                u.allergies AS allergies, u.dislikes AS dislikes,
-               coalesce(u.negative_feedback, []) AS negative_feedback
+               coalesce(u.negative_feedback, []) AS negative_feedback,
+               coalesce(u.birth_date, "") AS birthDate
         """
         try:
             result = graph_db.query(cypher, {"user_id": user_id})
@@ -33,7 +34,7 @@ class SemanticMemory:
 
         cypher = """
         MATCH (u:User {id: $user_id})
-        SET u.negative_feedback = coalesce(u.negative_feedback, []) + $memory_entry
+        SET u.negative_feedback = coalesce(u.negative_feedback, []) + [$memory_entry]
         RETURN u.negative_feedback
         """
         try:

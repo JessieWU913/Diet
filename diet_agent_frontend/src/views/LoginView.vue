@@ -9,7 +9,7 @@
           <input
             type="text"
             v-model="userId"
-            placeholder="请输入您的专属ID"
+            placeholder="请输入账号"
             required
             class="form-control"
           />
@@ -21,6 +21,28 @@
             type="text"
             v-model="userName"
             placeholder="怎么称呼您？"
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>密码</label>
+          <input
+            type="password"
+            v-model="password"
+            placeholder="请输入密码"
+            required
+            class="form-control"
+          />
+        </div>
+
+        <div v-if="!isLoginMode" class="form-group">
+          <label>确认密码</label>
+          <input
+            type="password"
+            v-model="confirmPassword"
+            placeholder="请再次输入密码"
+            required
             class="form-control"
           />
         </div>
@@ -47,50 +69,64 @@ import axios from 'axios'
 
 const router = useRouter()
 
-// 核心状态控制
 const isLoginMode = ref(true)
 const userId = ref('')
+const password = ref('') // 🌟 新增密码状态
+const confirmPassword = ref('') // 🌟 新增确认密码状态
 const userName = ref('')
 const loading = ref(false)
 
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value
-  userId.value = '' // 切换时清空输入框
+  // 切换模式时清空所有表单
+  userId.value = ''
+  password.value = ''
+  confirmPassword.value = ''
   userName.value = ''
 }
 
 const handleSubmit = async () => {
-  if (!userId.value.trim()) {
-    alert('账号不能为空！')
+  // 🌟 强行剔除首尾的隐形空格
+  const cleanUserId = userId.value.trim()
+  const cleanPassword = password.value.trim()
+  const cleanConfirm = confirmPassword.value.trim()
+  const cleanName = userName.value.trim()
+
+  if (!cleanUserId || !cleanPassword) {
+    alert('账号和密码不能为空！')
+    return
+  }
+
+  if (!isLoginMode.value && cleanPassword !== cleanConfirm) {
+    alert('两次输入的密码不一致，请重新输入！')
     return
   }
 
   loading.value = true
   try {
-    // 假设你的后端接口是 /api/auth/，用 action 区分登录还是注册
     const response = await axios.post('http://127.0.0.1:8000/api/auth/', {
-      user_id: userId.value,
-      name: userName.value,
+      user_id: cleanUserId,
+      password: cleanPassword,
+      name: cleanName,
       action: isLoginMode.value ? 'login' : 'register'
     })
 
     if (response.data.status === 'success') {
       if (isLoginMode.value) {
-        // 🌟 解决痛点 1：登录成功后，存入本地并强制跳转到主界面 (如 /chat)
-        localStorage.setItem('user_id', userId.value)
-        alert('登录成功！')
+        localStorage.setItem('user_id', cleanUserId)
         router.push('/chat')
       } else {
-        // 🌟 解决痛点 2：注册成功后，不乱跳，而是切换回登录模式
         alert('注册成功，请登录！')
         isLoginMode.value = true
+        password.value = ''
+        confirmPassword.value = ''
       }
     } else {
       alert(response.data.error || '操作失败')
     }
   } catch (error) {
     console.error(error)
-    alert(error.response?.data?.error || '网络请求失败')
+    alert(error.response?.data?.error || '网络请求失败，请检查密码是否正确')
   } finally {
     loading.value = false
   }
@@ -98,7 +134,6 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* 充满全屏的背景，盖住原来的布局 */
 .auth-container {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   background: #f4f7f6; display: flex; justify-content: center; align-items: center; z-index: 9999;
@@ -108,7 +143,7 @@ const handleSubmit = async () => {
   box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center;
 }
 .auth-title { margin-top: 0; margin-bottom: 30px; color: #2c3e50; font-size: 24px; }
-.form-group { text-align: left; margin-bottom: 20px; }
+.form-group { text-align: left; margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #34495e; font-size: 14px; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; }
 .form-control:focus { border-color: #42b983; }

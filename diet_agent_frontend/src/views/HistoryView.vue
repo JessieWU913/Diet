@@ -40,8 +40,16 @@ onMounted(async () => {
 })
 
 // 简单处理一下后端传来的字符串格式
-const parseDate = (str) => str.split('安排了:')[0].trim()
-const parseRecipes = (str) => str.split('安排了:')[1].trim()
+const parseDate = (str) => {
+  try {
+    return str?.split('安排了:')[0]?.trim() || '未知日期'
+  } catch { return '未知日期' }
+}
+const parseRecipes = (str) => {
+  try {
+    return str?.split('安排了:')[1]?.trim() || '无记录'
+  } catch { return '无记录' }
+}
 </script>
 
 <style scoped>

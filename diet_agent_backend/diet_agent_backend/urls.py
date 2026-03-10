@@ -15,12 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-from django.contrib import admin
-from django.urls import path
-
 # diet_agent_backend/urls.py
 from django.contrib import admin
-from django.urls import path, include  # 记得导入 include
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),

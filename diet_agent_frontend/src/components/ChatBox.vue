@@ -36,7 +36,7 @@
               </div>
             </div>
             <div v-else class="export-success">
-              ✅ 已成功导出至 {{ msg.exportDate }} <router-link to="/meal">去查看</router-link>
+              ✅ 已成功导出至 {{ msg.exportDate }} <router-link to="/meals">去查看</router-link>
             </div>
           </div>
 

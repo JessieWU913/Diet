@@ -9,9 +9,11 @@ from typing import TypedDict, Literal, Annotated, Sequence
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.message import add_messages
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+from langchain_core.utils.function_calling import convert_to_openai_function
 
 from .mcp_tools import vector_search_recipe, get_food_nutrition, check_food_conflicts, search_recipe_by_ingredients
 
@@ -19,7 +21,7 @@ from .memory.manager import MemoryManager
 
 # 状态定义
 class AgentState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], operator.add]
+    messages: Annotated[Sequence[BaseMessage], add_messages]
     user_mode: str
     reflection_count: int
     user_profile: dict
@@ -31,17 +33,16 @@ llm = ChatOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     model=os.getenv("LLM_MODEL_NAME"),
     default_headers={"X-Failover-Enabled": "true"},
-    model_kwargs={
-        "extra_body": {"top_k": 20}
-    },
+    extra_body={"top_k": 20},
     max_tokens=2048,
     temperature=0.1,
     frequency_penalty=1.1
 )
 
-# 绑定四大工具
+# 绑定四大工具（使用 functions 格式兼容 Gitee AI 等国产 API）
 tools = [vector_search_recipe, get_food_nutrition, check_food_conflicts, search_recipe_by_ingredients]
-llm_with_tools = llm.bind_tools(tools)
+openai_fns = [convert_to_openai_function(t) for t in tools]
+llm_with_tools = llm.bind(functions=openai_fns)
 
 
 # 核心节点
@@ -56,9 +57,12 @@ def agent_node(state: AgentState):
     # 用户的忌口、负面反馈和历史推荐记录
     memory_prompt = MemoryManager.build_system_memory_prompt(user_id)
 
+    raw_height = profile.get("height")
+    raw_weight = profile.get("weight")
+
+    height = float(raw_height) if raw_height else 0.0
+    weight = float(raw_weight) if raw_weight else 0.0
     gender = profile.get("gender", "female")
-    height = profile.get("height", 0)
-    weight = profile.get("weight", 0)
     birth_date = profile.get("birth_date")
 
     system_prompt = f"""你是一个连接了 Neo4j 专业营养知识图谱的膳食健康助手。
@@ -191,9 +195,64 @@ def reflector_router(state: AgentState) -> Literal["agent", "__end__"]:
         return "agent"
     return "__end__"
 
+# 自定义工具执行节点，兼容字典和对象格式的 tool_calls
+def custom_tools_execution_node(state: AgentState):
+    messages = state['messages']
+    last_msg = messages[-1]
+    results = []
+
+    # 构建工具映射表
+    tool_map = {t.name: t for t in tools}
+
+    # 检查是否有 tool_calls
+    tool_calls = getattr(last_msg, 'tool_calls', [])
+
+    if tool_calls:
+        print(f"执行工具调用: {len(tool_calls)} 个")
+        for call in tool_calls:
+            try:
+                # 兼容字典和对象访问
+                if isinstance(call, dict):
+                    tool_name = call.get('name')
+                    tool_args = call.get('args', {})
+                    call_id = call.get('id')
+                else:
+                    tool_name = getattr(call, 'name')
+                    tool_args = getattr(call, 'args', {})
+                    call_id = getattr(call, 'id')
+
+                print(f"调用工具: {tool_name} | 参数: {tool_args}")
+
+                if tool_name in tool_map:
+                    tool_instance = tool_map[tool_name]
+                    # 执行工具
+                    tool_output = tool_instance.invoke(tool_args)
+
+                    # 构造 ToolMessage
+                    results.append(ToolMessage(
+                        tool_call_id=call_id,
+                        name=tool_name,
+                        content=str(tool_output)
+                    ))
+                else:
+                    results.append(ToolMessage(
+                        tool_call_id=call_id,
+                        name=tool_name,
+                        content=f"Error: Tool {tool_name} not found."
+                    ))
+            except Exception as e:
+                print(f"工具执行异常: {e}")
+                results.append(ToolMessage(
+                    tool_call_id=call_id if call_id else "unknown",
+                    name=tool_name if tool_name else "unknown",
+                    content=f"Error executing tool: {str(e)}"
+                ))
+
+    return {"messages": results}
+
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
-workflow.add_node("tools", ToolNode(tools))
+workflow.add_node("tools", custom_tools_execution_node)
 workflow.add_node("reflector", reflector_node)
 
 workflow.set_entry_point("agent")
