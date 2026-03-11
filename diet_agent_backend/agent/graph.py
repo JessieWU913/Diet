@@ -18,6 +18,7 @@ from langchain_core.utils.function_calling import convert_to_openai_function
 from .mcp_tools import vector_search_recipe, get_food_nutrition, check_food_conflicts, search_recipe_by_ingredients
 
 from .memory.manager import MemoryManager
+from .context import ContextBuilder
 
 # 状态定义
 class AgentState(TypedDict):
@@ -45,83 +46,22 @@ openai_fns = [convert_to_openai_function(t) for t in tools]
 llm_with_tools = llm.bind(functions=openai_fns)
 
 
-# 核心节点
+# 核心节点（GSSC 上下文管线重构）
 def agent_node(state: AgentState):
     mode = state.get('user_mode', 'standard')
     profile = state.get('user_profile', {})
     user_id = state.get('user_id')
 
-    compressed_messages = MemoryManager.apply_working_memory(state['messages'])
+    # -------- GSSC 上下文管线 --------
+    builder = ContextBuilder(
+        user_id=user_id,
+        user_mode=mode,
+        profile=profile,
+        max_tokens=2048,
+        max_history=6,
+    )
+    system_prompt, compressed_messages = builder.build(state['messages'])
     messages = list(compressed_messages)
-
-    # 用户的忌口、负面反馈和历史推荐记录
-    memory_prompt = MemoryManager.build_system_memory_prompt(user_id)
-
-    raw_height = profile.get("height")
-    raw_weight = profile.get("weight")
-
-    height = float(raw_height) if raw_height else 0.0
-    weight = float(raw_weight) if raw_weight else 0.0
-    gender = profile.get("gender", "female")
-    birth_date = profile.get("birth_date")
-
-    system_prompt = f"""你是一个连接了 Neo4j 专业营养知识图谱的膳食健康助手。
-        你的任务是根据图谱返回的【真实数据】为用户提供饮食建议。
-
-        {memory_prompt}
-
-【核心指令】：
-1. 优先调用工具：必须且只能调用工具来获取食物信息，严禁胡编乱造。
-2. JSON 解析逻辑：
-   - 工具返回的 `nutrients_raw` 或 `ingredients_raw` 是 JSON 字符串。你必须像程序员一样解析它们，提取出关键数值告知用户。
-   - 如果 `nutrients_raw` 中包含“营养建议”，务必将其作为你回答的一部分。
-3. 减脂意图识别：
-   - 只要用户提到“减脂、减肥”或处于 weight_loss 模式，必须传 strict_mode=True。
-   - 拿到菜谱后，你【必须】像专业营养师一样分析宏量营养素（点出蛋白质含量，提示脂肪或碳水风险）。
-4. 兜底逻辑：
-   - 如果 `search_recipe_by_ingredients` 没搜到，必须尝试用 `vector_search_recipe` 进行语义搜索。
-5. 意图分离法则：调用 vector_search_recipe 时，query 只能填正向词。
-
-【回复风格】：
-- 像朋友一样亲切，但像医生一样专业。
-"""
-
-    age = 22  # 设个兜底默认值
-    if birth_date:
-        try:
-            birth_year = datetime.strptime(birth_date, "%Y-%m-%d").year
-            current_year = datetime.now().year
-            age = current_year - birth_year
-        except ValueError:
-            pass
-
-    if mode == 'weight_loss' and weight > 0 and height > 0:
-        if gender == 'male':
-            bmr = 10 * weight + 6.25 * height - 5 * age + 5
-        else:
-            bmr = 10 * weight + 6.25 * height - 5 * age - 161
-
-        tdee = bmr * 1.375
-        target_calories = tdee - 400
-        breakfast_cal = target_calories * 0.3
-        lunch_cal = target_calories * 0.4
-        dinner_cal = target_calories * 0.3
-
-        system_prompt += f"""
-【智能减脂与饱腹感管理引擎】：
-基于用户的身体数据，科学减脂指标如下：
-- TDEE：约 {int(tdee)} 千卡
-- 减脂期每日目标：约 {int(target_calories)} 千卡
-- 本餐建议分配：早餐 {int(breakfast_cal)}千卡，午餐 {int(lunch_cal)}千卡，晚餐 {int(dinner_cal)}千卡。
-
-【拼餐与饱腹感(极度重要)】：
-当用户要求推荐特定正餐时，推荐总热量必须尽量贴近该餐的目标值。
-1. 拒绝孤立的低热量食物：绝对不能只推荐一个 100 千卡的菜，用户会吃不饱！
-2. 必须进行智能拼餐：挑选 1个主菜 + 1个配菜，或主动搭配主食，直到总热量接近目标值。
-3. 清晰展示加总逻辑：列出推荐组合，并计算总热量。
-"""
-    elif weight > 0:
-        system_prompt += f"\n【健康参考】：用户当前体重为 {weight}kg。请在推荐时保持营养均衡。"
 
     # 将 System Prompt 置于消息流首位
     if messages and isinstance(messages[0], SystemMessage):
@@ -131,7 +71,7 @@ def agent_node(state: AgentState):
 
     response = llm_with_tools.invoke(messages)
 
-    # 🌟 兜底：拦截 Gitee 漏出标记 (保留你的原生逻辑)
+    # 兜底：拦截 Gitee 漏出标记
     if not response.tool_calls:
         content = response.content
         target_tools = ["get_food_nutrition", "check_food_conflicts", "search_recipe_by_ingredients", "vector_search_recipe"]
@@ -139,7 +79,7 @@ def agent_node(state: AgentState):
             if tool_name in content:
                 print(f"拦截到 Gitee 漏出的工具标记: {tool_name}")
                 try:
-                    match = re.search(f"{tool_name}.*?({{.*?}})", content, re.DOTALL)
+                    match = re.search(tool_name + r".*?(\{.*?\})", content, re.DOTALL)
                     if match:
                         args = json.loads(match.group(1))
                         print(f"强制执行工具: {tool_name} | 参数: {args}")
