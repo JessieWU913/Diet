@@ -178,12 +178,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.stats-view { max-width: 1000px; margin: 0 auto; }
+.stats-view { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; color: #2d3436; }
 .period-tabs { display: flex; gap: 6px; }
 .period-tabs button { padding: 7px 16px; border: 1px solid #dfe6e9; border-radius: 20px; background: #fff; font-size: 13px; cursor: pointer; color: #636e72; transition: .2s; }
-.period-tabs button.active { background: #2d3436; color: #fff; border-color: #2d3436; }
+.period-tabs button.active { background: #7761e5; color: #fff; border-color: #7761e5; }
 
 .today-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
 .today-card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.04); display: flex; flex-direction: column; gap: 8px; }
@@ -200,5 +200,5 @@ onBeforeUnmount(() => {
 .chart-card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .chart-card.wide { grid-column: 1 / -1; }
 .chart-card h3 { font-size: 15px; color: #2d3436; margin: 0 0 12px; }
-.chart-box { width: 100%; height: 280px; }
+.chart-box { width: 100%; height: 320px; }
 </style>

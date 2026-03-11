@@ -9,6 +9,7 @@
       </div>
     </div>
 
+    <div class="health-content">
     <div v-if="loading" class="loading-state">正在翻阅图谱记忆...</div>
 
     <div v-else-if="allLogs.length === 0" class="empty-state">
@@ -63,6 +64,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -167,7 +169,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.health-log-view { max-width: 800px; margin: 0 auto; }
+.health-log-view { width: 100%; }
+.health-content { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; color: #2d3436; }
 .date-nav { display: flex; align-items: center; gap: 12px; }
@@ -185,7 +188,7 @@ onMounted(() => {
 
 .day-group { margin-bottom: 28px; }
 .day-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; position: relative; }
-.day-dot { position: absolute; left: -20px; width: 12px; height: 12px; border-radius: 50%; background: #27ae60; border: 3px solid #fff; box-shadow: 0 0 0 2px #27ae60; }
+.day-dot { position: absolute; left: -20px; width: 12px; height: 12px; border-radius: 50%; background: #7761e5; border: 3px solid #fff; box-shadow: 0 0 0 2px #7761e5; }
 .day-date { font-size: 15px; font-weight: 700; color: #2d3436; }
 .day-cal { font-size: 13px; color: #636e72; background: #f0f2f5; padding: 2px 10px; border-radius: 10px; }
 
@@ -199,12 +202,12 @@ onMounted(() => {
 .li-cal { font-size: 13px; color: #636e72; font-weight: 600; min-width: 70px; text-align: right; }
 .li-macros { font-size: 11px; color: #b2bec3; min-width: 140px; text-align: right; }
 
-.events-block { background: #fffbf0; border: 1px solid #ffeaa7; }
+.events-block { background: #fef9e7; border: 1px solid #f6c342; }
 .event-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 13px; color: #636e72; line-height: 1.5; }
 .ei-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
 
 /* 历史对话 */
-.chat-history-section { margin-top: 40px; }
+.chat-history-section { margin-top: 0; }
 .chat-history-section h3 { font-size: 18px; color: #2d3436; margin-bottom: 16px; }
 .ch-empty { color: #b2bec3; font-size: 14px; text-align: center; padding: 20px; }
 .ch-card { background: #fff; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.04); overflow: hidden; }
@@ -217,7 +220,7 @@ onMounted(() => {
 .ch-msg { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f8f9fa; align-items: flex-start; }
 .ch-msg:last-child { border-bottom: none; }
 .ch-role { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
-.ch-user .ch-role { background: #e1f0fa; color: #2193b0; }
-.ch-ai .ch-role { background: #e8f5e9; color: #27ae60; }
+.ch-user .ch-role { background: #ede9fc; color: #7761e5; }
+.ch-ai .ch-role { background: #e3f5e8; color: #4aa458; }
 .ch-text { font-size: 13px; color: #636e72; line-height: 1.5; }
 </style>

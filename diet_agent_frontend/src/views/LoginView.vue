@@ -136,21 +136,21 @@ const handleSubmit = async () => {
 <style scoped>
 .auth-container {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: #f4f7f6; display: flex; justify-content: center; align-items: center; z-index: 9999;
+  background: linear-gradient(135deg, #2d2346 0%, #7761e5 100%); display: flex; justify-content: center; align-items: center; z-index: 9999;
 }
 .auth-card {
-  background: white; width: 100%; max-width: 400px; padding: 40px; border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center;
+  background: white; width: 100%; max-width: 400px; padding: 40px; border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2); text-align: center;
 }
-.auth-title { margin-top: 0; margin-bottom: 30px; color: #2c3e50; font-size: 24px; }
+.auth-title { margin-top: 0; margin-bottom: 30px; color: #2d2346; font-size: 24px; }
 .form-group { text-align: left; margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #34495e; font-size: 14px; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; }
-.form-control:focus { border-color: #42b983; }
-.submit-btn { width: 100%; background: #42b983; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-.submit-btn:hover:not(:disabled) { background: #369f6e; }
+.form-control:focus { border-color: #7761e5; }
+.submit-btn { width: 100%; background: #7761e5; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+.submit-btn:hover:not(:disabled) { background: #6350d0; }
 .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
 .auth-switch { margin-top: 20px; font-size: 14px; color: #7f8c8d; }
-.auth-switch a { color: #3498db; text-decoration: none; font-weight: bold; margin-left: 5px; }
+.auth-switch a { color: #7761e5; text-decoration: none; font-weight: bold; margin-left: 5px; }
 .auth-switch a:hover { text-decoration: underline; }
 </style>

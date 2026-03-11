@@ -215,48 +215,48 @@ onMounted(() => {
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f6fa; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0eef9; }
 
 #app { display: flex; min-height: 100vh; }
 #app.no-sidebar { display: block; }
 
 /* ========== 侧边栏 ========== */
 .sidebar {
-  width: 220px; background: #fff; border-right: 1px solid #e8ecf1;
+  width: 220px; background: #2d2346; border-right: none;
   display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
 }
 .sidebar-logo {
   padding: 24px 20px 20px; display: flex; align-items: center; gap: 10px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid rgba(255,255,255,.1);
 }
 .logo-icon { font-size: 28px; }
-.logo-text { font-size: 20px; font-weight: 700; color: #2d3436; }
+.logo-text { font-size: 20px; font-weight: 700; color: #fff; }
 
 .sidebar-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
 .nav-item {
   display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-  border-radius: 10px; text-decoration: none; color: #636e72;
+  border-radius: 10px; text-decoration: none; color: rgba(255,255,255,.6);
   font-size: 15px; font-weight: 500; transition: all .2s;
 }
-.nav-item:hover { background: #f0f4f8; color: #2d3436; }
-.nav-item.router-link-active { background: #e8f5e9; color: #27ae60; font-weight: 600; }
+.nav-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-item.router-link-active { background: #7761e5; color: #fff; font-weight: 600; }
 .nav-icon { font-size: 18px; width: 24px; text-align: center; }
 
-.sidebar-bottom { padding: 16px; border-top: 1px solid #f0f2f5; }
+.sidebar-bottom { padding: 16px; border-top: 1px solid rgba(255,255,255,.1); }
 .avatar-section {
   display: flex; align-items: center; gap: 12px; padding: 10px;
   border-radius: 10px; cursor: pointer; transition: .2s;
 }
-.avatar-section:hover { background: #f0f4f8; }
+.avatar-section:hover { background: rgba(255,255,255,.08); }
 .avatar-circle {
-  width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #43e97b, #38f9d7);
+  width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #7761e5, #8ac3f9);
   color: #fff; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 16px;
 }
-.avatar-name { font-size: 14px; color: #636e72; font-weight: 500; }
+.avatar-name { font-size: 14px; color: rgba(255,255,255,.7); font-weight: 500; }
 
 /* ========== 主内容 ========== */
-.main-content { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; }
+.main-content { margin-left: 220px; flex: 1; padding: 24px 28px; min-height: 100vh; width: calc(100vw - 220px); }
 .main-full { width: 100%; }
 
 /* ========== 弹窗 ========== */
@@ -280,7 +280,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .pm-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 .pm-avatar-big {
   width: 56px; height: 56px; border-radius: 50%;
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
+  background: linear-gradient(135deg, #7761e5, #8ac3f9);
   color: #fff; display: flex; align-items: center; justify-content: center;
   font-size: 24px; font-weight: 700;
 }
@@ -296,15 +296,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   padding: 10px 12px; border: 1px solid #dfe6e9; border-radius: 8px;
   font-size: 14px; outline: none; transition: .2s;
 }
-.pm-field input:focus, .pm-field select:focus { border-color: #27ae60; }
+.pm-field input:focus, .pm-field select:focus { border-color: #7761e5; }
 
 .tag-box {
   display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
   border: 1px solid #dfe6e9; border-radius: 8px; min-height: 40px; align-items: center;
 }
-.tag-box:focus-within { border-color: #27ae60; }
+.tag-box:focus-within { border-color: #7761e5; }
 .tag {
-  background: #e8f5e9; color: #27ae60; padding: 4px 10px; border-radius: 16px;
+  background: #ede9fc; color: #7761e5; padding: 4px 10px; border-radius: 16px;
   font-size: 13px; display: flex; align-items: center; gap: 4px;
 }
 .tag-x { cursor: pointer; font-weight: 700; color: #e74c3c; }
@@ -312,10 +312,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 .pm-actions { display: flex; gap: 12px; margin-top: 24px; }
 .pm-save {
-  flex: 1; padding: 12px; background: #27ae60; color: #fff;
+  flex: 1; padding: 12px; background: #7761e5; color: #fff;
   border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
 }
-.pm-save:hover { background: #219a52; }
+.pm-save:hover { background: #6350d0; }
 .pm-save:disabled { background: #95a5a6; }
 .pm-logout {
   padding: 12px 24px; background: #fff0f0; color: #e74c3c;

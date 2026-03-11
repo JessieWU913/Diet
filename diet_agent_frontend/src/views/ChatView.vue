@@ -51,10 +51,19 @@
         <div v-for="(msg, idx) in messages" :key="idx" :class="['msg-row', msg.role === 'user' ? 'is-user' : 'is-ai']">
           <div class="msg-avatar">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
           <div class="msg-body">
-            <div class="msg-content" v-html="formatMessage(msg.content)"></div>
+            <!-- DeepSeek 风格：思考过程（灰色小字，可折叠） -->
+            <div v-if="msg.thinking" class="thinking-block">
+              <div class="thinking-toggle" @click="msg.thinkingCollapsed = !msg.thinkingCollapsed">
+                <span class="thinking-label">🤔 深度思考</span>
+                <span class="tk-chevron">{{ msg.thinkingCollapsed ? '▸ 展开' : '▾ 收起' }}</span>
+              </div>
+              <div v-if="!msg.thinkingCollapsed" class="thinking-content">{{ msg.thinking }}</div>
+            </div>
+            <!-- 正式回答（Markdown 渲染，黑色正式字体） -->
+            <div class="msg-content" v-html="formatMessage(msg.answer || msg.content)"></div>
 
             <!-- 菜谱导出 -->
-            <div v-if="msg.role === 'assistant' && isRecipeReply(msg.content)" class="export-block">
+            <div v-if="msg.role === 'assistant' && isRecipeReply(msg)" class="export-block">
               <div v-if="!msg.exported" class="export-prompt">
                 <span>🍱 检测到菜谱推荐</span>
                 <div class="export-row">
@@ -113,8 +122,20 @@ const chatWindowRef = ref(null)
 const currentSessionId = ref('')
 
 const messages = ref([
-  { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！我是智能膳食助手。告诉我你想吃什么，或者冰箱有什么食材，我来帮你搭配！`, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
+  { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！我是智能膳食助手。告诉我你想吃什么，或者冰箱有什么食材，我来帮你搭配！`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
 ])
+
+// 解析 DeepSeek 思考过程
+const parseAIResponse = (text) => {
+  if (!text) return { thinking: '', answer: '' }
+  const match = text.match(/<think>([\s\S]*?)<\/think>/i)
+  if (match) {
+    const thinking = match[1].trim()
+    const answer = text.replace(/<think>[\s\S]*?<\/think>/i, '').trim()
+    return { thinking, answer }
+  }
+  return { thinking: '', answer: text }
+}
 
 // 偏好食材
 const favorites = ref([])
@@ -194,10 +215,14 @@ const loadSession = (session) => {
   currentSessionId.value = session.session_id
   const msgs = session.msgs || []
   if (msgs.length > 0 && msgs[0].content) {
-    messages.value = msgs.map(m => ({
-      role: m.role, content: m.content,
-      feedback: null, showReasons: false, feedbackSubmitted: false, exported: false
-    }))
+    messages.value = msgs.map(m => {
+      const { thinking, answer } = parseAIResponse(m.content || '')
+      return {
+        role: m.role, content: m.content,
+        thinking, answer, thinkingCollapsed: true,
+        feedback: null, showReasons: false, feedbackSubmitted: false, exported: false
+      }
+    })
   }
   scrollBottom()
 }
@@ -205,7 +230,7 @@ const loadSession = (session) => {
 const startNewChat = () => {
   currentSessionId.value = ''
   messages.value = [
-    { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！有什么想吃的？`, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
+    { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！有什么想吃的？`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
   ]
 }
 
@@ -245,8 +270,10 @@ const sendMessage = async () => {
       session_id: userId.value ? `session_${userId.value}` : 'guest_session'
     })
     const today = new Date().toISOString().split('T')[0]
+    const { thinking, answer } = parseAIResponse(res.data.response)
     messages.value.push({
       role: 'assistant', content: res.data.response,
+      thinking, answer, thinkingCollapsed: true,
       feedback: null, showReasons: false, feedbackSubmitted: false,
       exportDate: today, exported: false
     })
@@ -270,65 +297,71 @@ const scrollBottom = async () => {
 }
 
 // 菜谱导出 —— 导出到 localStorage，RecipeView 会读取
-const isRecipeReply = (text) => text && (text.includes('热量') || text.includes('卡')) && text.includes('**')
+const isRecipeReply = (msg) => {
+  const text = msg.answer || msg.content || ''
+  return text.includes('**') && (text.includes('热量') || text.includes('卡') || text.includes('kcal') || text.includes('推荐'))
+}
 
 const extractRecipeNames = (text) => {
   const names = []
-  const regex = /\*\*([^*]+)\*\*/g
+  const regex = /\*\*([^*\n]+)\*\*/g
   let m
-  const exclude = ['主食','主菜','配菜','晚餐','加餐','早餐','午餐','注意','建议','总计','热量','蛋白质','特点']
+  const exclude = new Set(['主食','主菜','配菜','晚餐','加餐','早餐','午餐','注意','建议','总计','热量','蛋白质','特点','步骤','食材','汤','粥','做法','准备','总结'])
   while ((m = regex.exec(text)) !== null) {
-    let name = m[1].trim().replace(/^[0-9.\-\s]+/, '')
-    if (name && !exclude.includes(name) && name.length < 15) names.push(name)
+    let name = m[1].trim().replace(/^[0-9.\-\s]+/, '').replace(/[:：].*/, '').trim()
+    if (name && !exclude.has(name) && name.length >= 2 && name.length <= 12) names.push(name)
   }
   return [...new Set(names)]
 }
 
 const exportToMenu = async (msg) => {
   if (!msg.exportDate) { alert('请选择日期！'); return }
-  const recipeNames = extractRecipeNames(msg.content)
-  if (recipeNames.length === 0) { alert('未能提取到有效菜名。'); return }
+  const answerText = msg.answer || msg.content
+  const recipeNames = extractRecipeNames(answerText)
+  if (recipeNames.length === 0) { alert('未能提取到有效菜名。请确认 AI 回答中有**加粗**的菜品名称。'); return }
+
+  const key = `diet_meals_${userId.value || 'guest'}`
+  const saved = JSON.parse(localStorage.getItem(key) || '{}')
+  if (!saved[msg.exportDate]) saved[msg.exportDate] = []
 
   try {
     const res = await API.post('/recipe/', { names: recipeNames })
-    if (res.data.data?.length > 0) {
-      const key = `diet_meals_${userId.value || 'guest'}`
-      const saved = JSON.parse(localStorage.getItem(key) || '{}')
-      if (!saved[msg.exportDate]) saved[msg.exportDate] = []
+    const dbItems = res.data.data || []
+    const dbNames = new Set(dbItems.map(r => r.name))
 
-      const formatted = res.data.data.map(item => {
-        let md = ''
-        if (item.ingredients) {
-          try {
-            const arr = JSON.parse(item.ingredients)
-            md += `**🛒 食材清单**：\n${arr.map(i => '- ' + (i.raw_text || i)).join('\n')}\n\n`
-          } catch { md += `**🛒 食材清单**：\n${item.ingredients}\n\n` }
-        }
-        if (item.steps) {
-          try {
-            const arr = JSON.parse(item.steps)
-            if (Array.isArray(arr)) md += `**🍳 烹饪步骤**：\n${arr.map((s, i) => (i + 1) + '. ' + s).join('\n')}`
-            else md += `**🍳 烹饪步骤**：\n${item.steps}`
-          } catch { md += `**🍳 烹饪步骤**：\n${item.steps}` }
-        }
-        return {
-          id: Date.now() + Math.random().toString(36).substr(2, 5),
-          name: item.name,
-          calories: item.calories || '未知',
-          protein: item.protein || 0,
-          fat: item.fat || 0,
-          carbs: item.carbs || 0,
-          ingredients: item.ingredients || '',
-          steps: item.steps || '',
-          details: md || '暂无详细做法记录。'
-        }
+    // 数据库找到的菜品使用完整信息
+    dbItems.forEach(item => {
+      saved[msg.exportDate].push({
+        id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        name: item.name,
+        calories: item.calories || 0,
+        protein: item.protein || 0,
+        fat: item.fat || 0,
+        carbs: item.carbs || 0,
+        ingredients: item.ingredients || '',
+        steps: item.steps || ''
       })
+    })
 
-      saved[msg.exportDate].push(...formatted)
-      localStorage.setItem(key, JSON.stringify(saved))
-      msg.exported = true
-    } else { alert(`数据库中未找到这些菜的详细数据：${recipeNames.join(', ')}`) }
-  } catch (e) { alert('请求菜谱详情失败') }
+    // 数据库没有的菜品只保存菜名（仍可收藏/参考）
+    recipeNames.filter(n => !dbNames.has(n)).forEach(name => {
+      saved[msg.exportDate].push({
+        id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        name, calories: 0, protein: 0, fat: 0, carbs: 0, ingredients: '', steps: ''
+      })
+    })
+  } catch (e) {
+    // 请求失败时也保存菜名
+    recipeNames.forEach(name => {
+      saved[msg.exportDate].push({
+        id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        name, calories: 0, protein: 0, fat: 0, carbs: 0, ingredients: '', steps: ''
+      })
+    })
+  }
+
+  localStorage.setItem(key, JSON.stringify(saved))
+  msg.exported = true
 }
 
 // 反馈
@@ -354,45 +387,45 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.chat-view { display: flex; height: 100%; gap: 0; }
+.chat-view { display: flex; height: calc(100vh - 48px); gap: 0; }
 
 /* === 左侧面板 === */
-.side-panel { width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #f0f2f5; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; }
+.side-panel { width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #ede9fc; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; height: 100%; }
 .side-panel h3 { font-size: 16px; color: #2d3436; margin: 0; }
 .side-panel h4 { font-size: 13px; color: #636e72; margin: 0 0 8px; font-weight: 600; }
 
-.mode-block { }
+.mode-block { margin: 0; }
 .mode-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 14px; border-radius: 10px; background: #f8f9fa; transition: .2s; font-size: 14px; }
 .mode-toggle:hover { background: #f0f2f5; }
 .mode-dot { width: 10px; height: 10px; border-radius: 50%; background: #b2bec3; transition: .2s; }
 .mode-dot.active { background: #e74c3c; box-shadow: 0 0 8px rgba(231,76,60,.4); }
 
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.fav-tag { display: flex; align-items: center; gap: 4px; background: #e8f5e9; color: #27ae60; padding: 4px 10px; border-radius: 12px; font-size: 13px; }
-.tag-del { background: none; border: none; color: #27ae60; cursor: pointer; font-size: 14px; padding: 0; margin-left: 2px; }
+.fav-tag { display: flex; align-items: center; gap: 4px; background: #ede9fc; color: #7761e5; padding: 4px 10px; border-radius: 12px; font-size: 13px; }
+.tag-del { background: none; border: none; color: #7761e5; cursor: pointer; font-size: 14px; padding: 0; margin-left: 2px; }
 .tag-del:hover { color: #c0392b; }
 .add-row { display: flex; gap: 6px; }
 .add-row input { flex: 1; padding: 8px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 13px; }
-.add-row button { padding: 8px 12px; background: #27ae60; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.add-row button { padding: 8px 12px; background: #7761e5; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
 
 .quick-btn { display: block; width: 100%; text-align: left; padding: 10px 12px; background: #f8f9fa; border: 1px solid #f0f2f5; border-radius: 10px; margin-bottom: 6px; font-size: 13px; color: #2d3436; cursor: pointer; transition: .2s; }
-.quick-btn:hover { background: #e3f2fd; border-color: #90caf9; }
+.quick-btn:hover { background: #ede9fc; border-color: #c4b8f0; }
 
 /* === 历史对话 === */
 .history-section { display: flex; flex-direction: column; gap: 6px; }
 .fav-hint { font-size: 11px; color: #b2bec3; font-weight: 400; }
-.new-chat-btn { width: 100%; padding: 8px 0; background: #42b983; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 4px; }
-.new-chat-btn:hover { background: #3aa876; }
+.new-chat-btn { width: 100%; padding: 8px 0; background: #7761e5; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 4px; }
+.new-chat-btn:hover { background: #6350d0; }
 .session-item { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: .15s; background: #f8f9fa; }
-.session-item:hover { background: #e3f2fd; }
-.session-item.active { background: #e1f5fe; border: 1px solid #90caf9; }
+.session-item:hover { background: #ede9fc; }
+.session-item.active { background: #ddd6f9; border: 1px solid #c4b8f0; }
 .si-title { flex: 1; font-size: 12px; color: #2d3436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .si-date { font-size: 11px; color: #b2bec3; flex-shrink: 0; }
 .si-del { background: none; border: none; color: #b2bec3; cursor: pointer; font-size: 14px; padding: 0 2px; }
 .si-del:hover { color: #e74c3c; }
 
 /* === 右侧对话框 === */
-.chat-main { flex: 1; display: flex; flex-direction: column; background: #fafbfc; overflow: hidden; }
+.chat-main { flex: 1; display: flex; flex-direction: column; background: #f7f5fd; overflow: hidden; height: 100%; }
 
 .chat-messages { flex: 1; overflow-y: auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 16px; }
 
@@ -400,12 +433,20 @@ onMounted(() => {
 .msg-row.is-user { align-self: flex-end; flex-direction: row-reverse; }
 
 .msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
-.is-user .msg-avatar { background: linear-gradient(135deg, #6dd5ed, #2193b0); }
-.is-ai .msg-avatar { background: linear-gradient(135deg, #84fab0, #8fd3f4); color: #2d3436; }
+.is-user .msg-avatar { background: linear-gradient(135deg, #8ac3f9, #7761e5); }
+.is-ai .msg-avatar { background: linear-gradient(135deg, #f6c342, #4aa458); color: #fff; }
 
 .msg-body { background: #fff; padding: 14px 18px; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,.04); line-height: 1.7; color: #2d3436; word-break: break-word; font-size: 14px; }
-.is-user .msg-body { background: #e1f0fa; border-top-right-radius: 4px; }
-.is-ai .msg-body { border-top-left-radius: 4px; border: 1px solid #f0f2f5; }
+.is-user .msg-body { background: #ede9fc; border-top-right-radius: 4px; }
+.is-ai .msg-body { border-top-left-radius: 4px; border: 1px solid #ede9fc; }
+
+/* 深度思考块 */
+.thinking-block { margin-bottom: 10px; border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; background: #f8f9fa; }
+.thinking-toggle { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; cursor: pointer; user-select: none; }
+.thinking-toggle:hover { background: #f0f2f5; }
+.thinking-label { font-size: 11px; color: #868e96; font-weight: 500; letter-spacing: 0.3px; }
+.tk-chevron { font-size: 11px; color: #adb5bd; }
+.thinking-content { padding: 8px 12px 10px; font-size: 12px; color: #adb5bd; line-height: 1.65; font-style: italic; white-space: pre-wrap; border-top: 1px solid #e9ecef; max-height: 200px; overflow-y: auto; }
 
 /* Markdown 穿透 */
 .msg-content :deep(p) { margin: 0 0 8px; }
@@ -426,7 +467,7 @@ onMounted(() => {
 .date-input { padding: 5px 8px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; }
 .export-btn { background: #e67e22; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .export-btn:hover { background: #d35400; }
-.export-done { font-size: 13px; color: #27ae60; font-weight: 600; }
+.export-done { font-size: 13px; color: #4aa458; font-weight: 600; }
 
 /* 反馈 */
 .feedback-row { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eaeaea; }
@@ -440,13 +481,13 @@ onMounted(() => {
 .reason-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .r-tag { background: #fff; border: 1px solid #dfe6e9; color: #7f8c8d; font-size: 12px; padding: 4px 10px; border-radius: 14px; cursor: pointer; transition: .2s; }
 .r-tag:hover { border-color: #e74c3c; color: #e74c3c; background: #fdf0ed; }
-.fb-thanks { margin-top: 8px; font-size: 12px; color: #27ae60; font-weight: 600; }
+.fb-thanks { margin-top: 8px; font-size: 12px; color: #4aa458; font-weight: 600; }
 
 /* 输入区 */
 .chat-input-area { display: flex; padding: 16px 24px; background: #fff; border-top: 1px solid #f0f2f5; gap: 12px; }
 .chat-input-area input { flex: 1; padding: 14px 18px; border: 1px solid #dfe6e9; border-radius: 12px; font-size: 14px; outline: none; background: #f8f9fa; transition: .2s; }
-.chat-input-area input:focus { border-color: #42b983; background: #fff; box-shadow: 0 0 0 3px rgba(66,185,131,.1); }
-.chat-input-area button { background: #42b983; color: #fff; border: none; padding: 0 28px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 14px; transition: .2s; }
+.chat-input-area input:focus { border-color: #7761e5; background: #fff; box-shadow: 0 0 0 3px rgba(119,97,229,.12); }
+.chat-input-area button { background: #7761e5; color: #fff; border: none; padding: 0 28px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 14px; transition: .2s; }
 .chat-input-area button:disabled { background: #b2bec3; cursor: not-allowed; }
-.chat-input-area button:not(:disabled):hover { background: #3aa876; }
+.chat-input-area button:not(:disabled):hover { background: #6350d0; }
 </style>

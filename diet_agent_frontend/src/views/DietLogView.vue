@@ -33,7 +33,7 @@
     </div>
 
     <!-- 今日记录 -->
-    <div class="meal-sections">
+    <div class="meal-grid">
       <div v-for="section in mealSections" :key="section.key" class="meal-section">
         <div class="ms-header">
           <span class="ms-icon">{{ section.icon }}</span>
@@ -304,7 +304,7 @@ onMounted(() => loadLogs())
 </script>
 
 <style scoped>
-.diet-log { max-width: 800px; margin: 0 auto; }
+.diet-log { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; color: #2d3436; }
 .date-nav { display: flex; align-items: center; gap: 8px; }
@@ -315,20 +315,21 @@ onMounted(() => loadLogs())
 .search-section { margin-bottom: 24px; position: relative; }
 .search-bar { display: flex; gap: 8px; }
 .search-bar input { flex: 1; padding: 12px 16px; border: 2px solid #dfe6e9; border-radius: 12px; font-size: 15px; outline: none; transition: .2s; }
-.search-bar input:focus { border-color: #27ae60; }
+.search-bar input:focus { border-color: #7761e5; }
 .meal-type-select { padding: 10px 14px; border: 1px solid #dfe6e9; border-radius: 10px; font-size: 14px; background: #fff; }
 .manual-add-btn { margin-top: 8px; padding: 8px 16px; background: #f8f9fa; border: 1px dashed #b2bec3; border-radius: 8px; cursor: pointer; font-size: 13px; color: #636e72; transition: .2s; }
-.manual-add-btn:hover { background: #e8f5e9; border-color: #27ae60; color: #27ae60; }
+.manual-add-btn:hover { background: #ede9fc; border-color: #7761e5; color: #7761e5; }
 
 .search-results { position: absolute; top: 52px; left: 0; right: 0; background: #fff; border: 1px solid #dfe6e9; border-radius: 12px; margin-top: 4px; max-height: 300px; overflow-y: auto; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,.1); }
 .search-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; transition: .15s; }
-.search-item:hover { background: #f0faf5; }
+.search-item:hover { background: #f7f5fd; }
 .si-name { flex: 1; font-weight: 500; color: #2d3436; }
 .si-type { font-size: 12px; color: #b2bec3; background: #f0f4f8; padding: 2px 8px; border-radius: 10px; }
 .si-cal { font-size: 13px; color: #636e72; min-width: 70px; text-align: right; }
-.si-add { color: #27ae60; font-weight: 600; font-size: 13px; }
+.si-add { color: #7761e5; font-weight: 600; font-size: 13px; }
 
-.meal-section { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.meal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+.meal-section { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .ms-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .ms-icon { font-size: 20px; }
 .ms-title { font-size: 16px; font-weight: 600; color: #2d3436; flex: 1; }
@@ -343,14 +344,14 @@ onMounted(() => loadLogs())
 .li-delete { background: none; border: none; color: #e74c3c; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .li-delete:hover { background: #fff0f0; }
 
-.daily-summary { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.daily-summary { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.04); width: 100%; }
 .daily-summary h3 { margin-bottom: 16px; color: #2d3436; font-size: 16px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .summary-card { text-align: center; padding: 16px; border-radius: 12px; }
-.summary-card.cal { background: #fff3e0; }
-.summary-card.protein { background: #e8f5e9; }
-.summary-card.fat { background: #fce4ec; }
-.summary-card.carbs { background: #e3f2fd; }
+.summary-card.cal { background: #ede9fc; }
+.summary-card.protein { background: #e3f5e8; }
+.summary-card.fat { background: #fef5e0; }
+.summary-card.carbs { background: #e6f2fe; }
 .sc-value { display: block; font-size: 24px; font-weight: 700; color: #2d3436; }
 .sc-label { display: block; font-size: 12px; color: #636e72; margin-top: 4px; }
 
@@ -366,8 +367,8 @@ onMounted(() => loadLogs())
 .am-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
 .am-field label { display: block; font-size: 12px; font-weight: 600; color: #636e72; margin-bottom: 4px; }
 .am-field input { width: 100%; padding: 10px 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 14px; }
-.am-save { width: 100%; padding: 12px; background: #27ae60; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-.am-save:hover { background: #219a52; }
+.am-save { width: 100%; padding: 12px; background: #7761e5; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.am-save:hover { background: #6350d0; }
 
 /* 详情弹窗 */
 .detail-modal { background: #fff; width: 520px; max-height: 80vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
@@ -380,7 +381,7 @@ onMounted(() => loadLogs())
 .dm-section { margin-bottom: 20px; }
 .dm-section h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
 .dm-loading, .dm-empty { text-align: center; padding: 20px; color: #b2bec3; }
-.dm-content :deep(.ing-tag) { display: inline-block; background: #e8f5e9; color: #27ae60; padding: 3px 10px; border-radius: 12px; margin: 2px 4px; font-size: 13px; }
+.dm-content :deep(.ing-tag) { display: inline-block; background: #ede9fc; color: #7761e5; padding: 3px 10px; border-radius: 12px; margin: 2px 4px; font-size: 13px; }
 .dm-content :deep(ol) { padding-left: 20px; }
 .dm-content :deep(li) { margin-bottom: 8px; color: #2d3436; line-height: 1.6; }
 </style>

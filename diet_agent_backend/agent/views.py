@@ -205,8 +205,11 @@ class RecipeDetailView(APIView):
         cypher = """
         MATCH (n:Recipe)
         WHERE n.name IN $names
-        RETURN n.name AS name, 
+        RETURN n.name AS name,
                n.calories AS calories,
+               n.protein AS protein,
+               n.fat AS fat,
+               n.carbs AS carbs,
                n.ingredients_raw AS ingredients,
                n.steps AS steps
         """
@@ -428,9 +431,10 @@ class RecommendMealsView(APIView):
         MATCH (n:Recipe)
         WHERE n.calories < 400 AND n.calories > 100
         {avoid_filter}
+        WITH n, rand() AS r
+        ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
                n.protein AS protein, n.fat AS fat, n.carbs AS carbs
-        ORDER BY n.protein DESC, n.calories ASC
         LIMIT 3
         """
         # 午餐推荐：营养均衡，热量适中
@@ -438,9 +442,10 @@ class RecommendMealsView(APIView):
         MATCH (n:Recipe)
         WHERE n.calories >= 300 AND n.calories <= 700
         {avoid_filter}
+        WITH n, rand() AS r
+        ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
                n.protein AS protein, n.fat AS fat, n.carbs AS carbs
-        ORDER BY (n.protein * 3) - (n.fat * 2) DESC
         LIMIT 4
         """
         # 晚餐推荐：控制热量
@@ -448,9 +453,10 @@ class RecommendMealsView(APIView):
         MATCH (n:Recipe)
         WHERE n.calories >= 200 AND n.calories <= 500
         {avoid_filter}
+        WITH n, rand() AS r
+        ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
                n.protein AS protein, n.fat AS fat, n.carbs AS carbs
-        ORDER BY n.calories ASC, n.protein DESC
         LIMIT 3
         """
         try:
@@ -536,7 +542,7 @@ class SimilarIngredientView(APIView):
                 """
                 keyword = name[:2] if len(name) >= 2 else name
                 results = graph_db.query(fallback, {"name": name, "keyword": keyword})
-            return Response({"data": results})
+            return Response({"similar": [r["name"] for r in results if r.get("name")]})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
@@ -557,7 +563,7 @@ class FoodConflictView(APIView):
         """
         try:
             results = graph_db.query(cypher, {"name": name})
-            return Response({"conflicts": results})
+            return Response({"conflicts": [r["name"] for r in results if r.get("name")]})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
@@ -571,27 +577,27 @@ class UserCollectionView(APIView):
 
         cypher = """
         MATCH (u:User {id: $user_id})-[:COLLECTED]->(c:Collection)
-        RETURN c.id AS id, c.name AS name, c.calories AS calories,
+        RETURN c.id AS id, c.name AS recipe_name, c.calories AS calories,
                c.protein AS protein, c.fat AS fat, c.carbs AS carbs,
-               c.ingredients_raw AS ingredients_raw,
+               c.ingredients_raw AS ingredients,
                c.steps AS steps,
                c.added_at AS added_at
         ORDER BY c.added_at DESC
         """
         try:
             results = graph_db.query(cypher, {"user_id": user_id})
-            return Response({"data": results})
+            return Response({"collections": results})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
     def post(self, request):
         user_id = request.data.get("user_id")
-        recipe_name = request.data.get("name", "")
+        recipe_name = request.data.get("recipe_name", request.data.get("name", ""))
         calories = request.data.get("calories", 0)
         protein = request.data.get("protein", 0)
         fat = request.data.get("fat", 0)
         carbs = request.data.get("carbs", 0)
-        ingredients_raw = request.data.get("ingredients_raw", "")
+        ingredients_raw = request.data.get("ingredients", request.data.get("ingredients_raw", ""))
         steps = request.data.get("steps", "")
 
         if not user_id or not recipe_name:
@@ -622,16 +628,25 @@ class UserCollectionView(APIView):
 
     def delete(self, request):
         user_id = request.query_params.get("user_id")
+        recipe_name = request.query_params.get("recipe_name")
         cid = request.query_params.get("id")
-        if not user_id or not cid:
+        if not user_id or (not cid and not recipe_name):
             return Response({"error": "缺少参数"}, status=400)
 
-        cypher = """
-        MATCH (u:User {id: $user_id})-[:COLLECTED]->(c:Collection {id: $cid})
-        DETACH DELETE c
-        """
+        if recipe_name:
+            cypher = """
+            MATCH (u:User {id: $user_id})-[:COLLECTED]->(c:Collection {name: $recipe_name})
+            DETACH DELETE c
+            """
+            params = {"user_id": user_id, "recipe_name": recipe_name}
+        else:
+            cypher = """
+            MATCH (u:User {id: $user_id})-[:COLLECTED]->(c:Collection {id: $cid})
+            DETACH DELETE c
+            """
+            params = {"user_id": user_id, "cid": cid}
         try:
-            graph_db.query(cypher, {"user_id": user_id, "cid": cid})
+            graph_db.query(cypher, params)
             return Response({"status": "success"})
         except Exception as e:
             return Response({"error": str(e)}, status=500)

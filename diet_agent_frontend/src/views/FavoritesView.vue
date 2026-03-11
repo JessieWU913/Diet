@@ -14,7 +14,10 @@
       <div v-for="(item, idx) in collections" :key="idx" class="fav-card">
         <div class="fc-header">
           <h3>{{ item.recipe_name }}</h3>
-          <button class="fc-remove" @click="removeCollection(item.recipe_name)">🗑️ 取消收藏</button>
+          <div class="fc-btns">
+            <button class="fc-detail" @click="viewDetail(item)">📖 查看做法</button>
+            <button class="fc-remove" @click="removeCollection(item.recipe_name)">🗑️ 取消收藏</button>
+          </div>
         </div>
         <div class="fc-macros">
           <span>🔥 {{ item.calories || '—' }} kcal</span>
@@ -50,11 +53,45 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- 步骤 -->
-        <div class="fc-steps" v-if="item.steps">
-          <h4>🍳 烹饪步骤</h4>
-          <div v-html="formatSteps(item.steps)"></div>
+    <!-- 菜谱详情弹窗 -->
+    <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
+      <div class="detail-modal">
+        <div class="dm-header">
+          <h3>{{ detailRecipe.recipe_name }}</h3>
+          <button class="close-btn" @click="closeDetail">×</button>
+        </div>
+        <div class="dm-body">
+          <div class="dm-macros">
+            <span>🔥 {{ detailRecipe.calories || '—' }} kcal</span>
+            <span>💪 {{ detailRecipe.protein || '—' }}g 蛋白</span>
+            <span>🫒 {{ detailRecipe.fat || '—' }}g 脂肪</span>
+            <span>🌾 {{ detailRecipe.carbs || '—' }}g 碳水</span>
+          </div>
+          <div v-if="detailLoading" class="dm-loading">加载中...</div>
+          <div v-else>
+            <div v-if="detailData && detailData.ingredients" class="dm-section">
+              <h4>🛒 食材清单</h4>
+              <div class="ing-tags" v-html="formatIngredients(detailData.ingredients)"></div>
+            </div>
+            <div v-else-if="detailRecipe.ingredients" class="dm-section">
+              <h4>🛒 食材清单</h4>
+              <div class="ing-tags" v-html="formatIngredients(detailRecipe.ingredients)"></div>
+            </div>
+            <div v-if="detailData && detailData.steps" class="dm-section">
+              <h4>🍳 烹饪步骤</h4>
+              <div class="steps-content" v-html="formatSteps(detailData.steps)"></div>
+            </div>
+            <div v-else-if="detailRecipe.steps" class="dm-section">
+              <h4>🍳 烹饪步骤</h4>
+              <div class="steps-content" v-html="formatSteps(detailRecipe.steps)"></div>
+            </div>
+            <div v-if="!detailLoading && !detailData && !detailRecipe.ingredients && !detailRecipe.steps" class="dm-empty">
+              暂无详细信息
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -67,8 +104,17 @@
           <button class="close-btn" @click="showShoppingList = false">×</button>
         </div>
         <div class="sm-body">
-          <div v-for="(ing, idx) in shoppingList" :key="idx" class="sl-item">
-            <span>{{ ing }}</span>
+          <div v-if="shoppingGroups.length === 0 || shoppingGroups.every(g => g.ingredients.length === 0)" class="sl-empty">
+            收藏的菜品暂无食材信息
+          </div>
+          <div v-else>
+            <div v-for="(group, gIdx) in shoppingGroups" :key="gIdx" class="sl-group">
+              <div class="sl-recipe-name">📌 {{ group.recipeName }}</div>
+              <div v-if="group.ingredients.length === 0" class="sl-no-ing">（无食材信息）</div>
+              <div v-for="(ing, iIdx) in group.ingredients" :key="iIdx" class="sl-item">
+                <span>{{ ing }}</span>
+              </div>
+            </div>
           </div>
           <button class="copy-btn" @click="copyShoppingList">📋 复制到剪贴板</button>
         </div>
@@ -85,24 +131,42 @@ const userId = localStorage.getItem('user_id') || ''
 const loading = ref(false)
 const collections = ref([])
 const showShoppingList = ref(false)
-const shoppingList = ref([])
+const shoppingGroups = ref([])
+const showDetail = ref(false)
+const detailRecipe = ref({})
+const detailData = ref(null)
+const detailLoading = ref(false)
 
 // 解析食材字符串为数组
 const parseIngredients = (raw) => {
   if (!raw) return []
   try {
     const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
     return arr.map(i => {
       const text = i.raw_text || (typeof i === 'string' ? i : JSON.stringify(i))
-      // 尝试提取食材名（去掉数量）
       const name = text.replace(/[\d.]+\s*(g|克|ml|毫升|斤|两|个|只|根|片|块|勺|杯|适量|少许|一些)/g, '').trim() || text
-      return { display: text, name, showSimilar: false, similars: [], similarLoading: false, showConflict: false, conflicts: [], conflictLoading: false }
+      return {
+        display: text,
+        name,
+        showSimilar: false,
+        similars: [],
+        similarLoading: false,
+        showConflict: false,
+        conflicts: [],
+        conflictLoading: false
+      }
     })
   } catch {
     return raw.split(/[,，、\n]/).filter(Boolean).map(t => ({
-      display: t.trim(), name: t.trim(),
-      showSimilar: false, similars: [], similarLoading: false,
-      showConflict: false, conflicts: [], conflictLoading: false
+      display: t.trim(),
+      name: t.trim(),
+      showSimilar: false,
+      similars: [],
+      similarLoading: false,
+      showConflict: false,
+      conflicts: [],
+      conflictLoading: false
     }))
   }
 }
@@ -117,15 +181,43 @@ const loadCollections = async () => {
       ...c,
       parsedIngredients: parseIngredients(c.ingredients)
     }))
-  } catch (e) { console.error(e) }
-  finally { loading.value = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
 }
 
 const removeCollection = async (recipeName) => {
   try {
     await API.delete(`/collection/?user_id=${userId}&recipe_name=${encodeURIComponent(recipeName)}`)
     collections.value = collections.value.filter(c => c.recipe_name !== recipeName)
-  } catch (e) { alert('取消收藏失败') }
+  } catch (e) {
+    alert('取消收藏失败')
+  }
+}
+
+// 查看详情：展示本地缓存数据，同时异步补充完整做法
+const viewDetail = async (item) => {
+  detailRecipe.value = item
+  detailData.value = null
+  detailLoading.value = true
+  showDetail.value = true
+  try {
+    const res = await API.post('/recipe/', { names: [item.recipe_name] })
+    if (res.data.data && res.data.data.length > 0) {
+      detailData.value = res.data.data[0]
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const closeDetail = () => {
+  showDetail.value = false
+  detailData.value = null
 }
 
 // 替换食材
@@ -134,13 +226,16 @@ const findSimilar = async (item, iIdx, name) => {
   ing.showSimilar = !ing.showSimilar
   ing.showConflict = false
   if (!ing.showSimilar) return
-  if (ing.similars.length > 0) return // 已缓存
+  if (ing.similars.length > 0) return
   ing.similarLoading = true
   try {
     const res = await API.get(`/similar-ingredient/?name=${encodeURIComponent(name)}`)
     ing.similars = res.data.similar || []
-  } catch (e) { console.error(e) }
-  finally { ing.similarLoading = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    ing.similarLoading = false
+  }
 }
 
 const replaceIngredient = (item, iIdx, newName) => {
@@ -162,91 +257,132 @@ const checkConflict = async (item, iIdx, name) => {
   try {
     const res = await API.get(`/food-conflict/?name=${encodeURIComponent(name)}`)
     ing.conflicts = res.data.conflicts || []
-  } catch (e) { console.error(e) }
-  finally { ing.conflictLoading = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    ing.conflictLoading = false
+  }
 }
 
-// 购物清单
+// 购物清单：按菜品分组列出所有食材
 const exportShoppingList = () => {
-  const allIngs = new Set()
-  collections.value.forEach(c => {
-    if (c.parsedIngredients) {
-      c.parsedIngredients.forEach(i => allIngs.add(i.display))
-    }
-  })
-  shoppingList.value = [...allIngs]
+  const groups = collections.value.map(c => ({
+    recipeName: c.recipe_name,
+    ingredients: c.parsedIngredients ? c.parsedIngredients.map(i => i.display) : []
+  }))
+  shoppingGroups.value = groups
   showShoppingList.value = true
 }
 
 const copyShoppingList = () => {
-  const text = shoppingList.value.join('\n')
-  navigator.clipboard.writeText(text).then(() => alert('✅ 已复制到剪贴板'))
+  const lines = shoppingGroups.value.map(g => {
+    const ings = g.ingredients.length > 0 ? g.ingredients.join('、') : '（无食材信息）'
+    return `【${g.recipeName}】${ings}`
+  })
+  navigator.clipboard.writeText(lines.join('\n')).then(() => alert('✅ 已复制到剪贴板'))
 }
 
+// 格式化食材（弹窗显示）
+const formatIngredients = (raw) => {
+  if (!raw) return ''
+  try {
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return raw
+    return arr.map(i => `<span class="ing-tag">${i.raw_text || i}</span>`).join(' ')
+  } catch {
+    return raw.split(/[,，、\n]/).filter(Boolean).map(t => `<span class="ing-tag">${t.trim()}</span>`).join(' ')
+  }
+}
+
+// 格式化步骤
 const formatSteps = (raw) => {
   if (!raw) return ''
   try {
     const arr = JSON.parse(raw)
     if (Array.isArray(arr)) return '<ol>' + arr.map(s => `<li>${s}</li>`).join('') + '</ol>'
     return raw
-  } catch { return raw.replace(/\n/g, '<br>') }
+  } catch {
+    return raw.replace(/\n/g, '<br>')
+  }
 }
 
 onMounted(() => loadCollections())
 </script>
 
 <style scoped>
-.favorites-view { max-width: 900px; margin: 0 auto; }
+.favorites-view { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; color: #2d3436; }
-.export-btn { padding: 10px 20px; background: #e67e22; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
-.export-btn:hover { background: #d35400; }
+.export-btn { padding: 10px 20px; background: #f6c342; color: #2d3436; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.export-btn:hover { background: #e5b336; }
 .export-btn:disabled { background: #95a5a6; cursor: not-allowed; }
 
 .loading-state { text-align: center; padding: 60px; color: #636e72; }
 .empty-state { text-align: center; padding: 80px; color: #b2bec3; font-size: 16px; }
 
-.fav-list { display: flex; flex-direction: column; gap: 20px; }
+.fav-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
 .fav-card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .fc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.fc-header h3 { font-size: 18px; color: #2d3436; }
-.fc-remove { padding: 6px 14px; border: 1px solid #e74c3c; color: #e74c3c; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; }
+.fc-header h3 { font-size: 18px; color: #2d3436; flex: 1; margin-right: 12px; }
+.fc-btns { display: flex; gap: 8px; flex-shrink: 0; }
+.fc-detail { padding: 6px 14px; border: 1px solid #7761e5; color: #7761e5; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; transition: .2s; }
+.fc-detail:hover { background: #ede9fc; }
+.fc-remove { padding: 6px 14px; border: 1px solid #e74c3c; color: #e74c3c; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; transition: .2s; }
 .fc-remove:hover { background: #fdf0ed; }
+
 .fc-macros { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .fc-macros span { font-size: 13px; padding: 5px 12px; background: #f8f9fa; border-radius: 8px; color: #636e72; }
 
-.fc-ingredients { margin-bottom: 16px; }
+.fc-ingredients { margin-bottom: 4px; }
 .fc-ingredients h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
 .ing-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid #f8f9fa; }
 .ing-name { font-size: 14px; color: #2d3436; min-width: 80px; }
 .ing-replace-btn, .ing-conflict-btn { padding: 3px 10px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
-.ing-replace-btn:hover { background: #e3f2fd; border-color: #2196f3; color: #2196f3; }
-.ing-conflict-btn:hover { background: #fff3e0; border-color: #ff9800; color: #ff9800; }
+.ing-replace-btn:hover { background: #ede9fc; border-color: #7761e5; color: #7761e5; }
+.ing-conflict-btn:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }
 
 .similar-panel, .conflict-panel { width: 100%; padding: 8px 12px; margin-top: 4px; border-radius: 8px; }
-.similar-panel { background: #e3f2fd; }
-.conflict-panel { background: #fff3e0; }
+.similar-panel { background: #ede9fc; }
+.conflict-panel { background: #fef5e0; }
 .sp-loading, .cp-loading { font-size: 12px; color: #636e72; }
-.sp-empty, .cp-safe { font-size: 12px; color: #27ae60; }
+.sp-empty, .cp-safe { font-size: 12px; color: #4aa458; }
 .sp-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.sp-tag { background: #fff; border: 1px solid #90caf9; color: #1976d2; padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; transition: .2s; }
-.sp-tag:hover { background: #1976d2; color: #fff; }
+.sp-tag { background: #fff; border: 1px solid #c4b8f0; color: #7761e5; padding: 4px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; transition: .2s; }
+.sp-tag:hover { background: #7761e5; color: #fff; }
 .cp-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.cp-tag { background: #fff; border: 1px solid #ffcc80; color: #e65100; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+.cp-tag { background: #fff; border: 1px solid #f6c342; color: #b38600; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
 
-.fc-steps { margin-top: 12px; }
-.fc-steps h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
-.fc-steps :deep(ol) { padding-left: 20px; }
-.fc-steps :deep(li) { margin-bottom: 8px; color: #2d3436; line-height: 1.6; }
+/* 弹窗通用 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #b2bec3; line-height: 1; padding: 0; }
+.close-btn:hover { color: #636e72; }
+
+/* 详情弹窗 */
+.detail-modal { background: #fff; width: 540px; max-height: 82vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+.dm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #f0f2f5; position: sticky; top: 0; background: #fff; z-index: 1; }
+.dm-header h3 { font-size: 18px; color: #2d3436; }
+.dm-body { padding: 24px; }
+.dm-macros { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.dm-macros span { font-size: 13px; padding: 6px 12px; background: #f8f9fa; border-radius: 8px; color: #636e72; }
+.dm-section { margin-bottom: 20px; }
+.dm-section h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; font-weight: 600; }
+.dm-loading { text-align: center; padding: 30px; color: #b2bec3; }
+.dm-empty { text-align: center; padding: 20px; color: #b2bec3; font-size: 14px; }
+.ing-tags :deep(.ing-tag) { display: inline-block; background: #ede9fc; color: #7761e5; padding: 4px 12px; border-radius: 12px; margin: 3px 4px; font-size: 13px; }
+.steps-content :deep(ol) { padding-left: 20px; }
+.steps-content :deep(li) { margin-bottom: 10px; color: #2d3436; line-height: 1.7; font-size: 14px; }
 
 /* 购物清单弹窗 */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.shopping-modal { background: #fff; width: 440px; max-height: 70vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
-.sm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #f0f2f5; }
+.shopping-modal { background: #fff; width: 460px; max-height: 75vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+.sm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #f0f2f5; position: sticky; top: 0; background: #fff; z-index: 1; }
 .sm-header h3 { font-size: 18px; color: #2d3436; }
-.close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #b2bec3; }
-.sm-body { padding: 20px 24px; }
-.sl-item { padding: 8px 12px; border-bottom: 1px solid #f8f9fa; font-size: 14px; color: #2d3436; }
-.copy-btn { margin-top: 16px; width: 100%; padding: 12px 0; background: #27ae60; color: #fff; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
-.copy-btn:hover { background: #219a52; }
+.sm-body { padding: 16px 24px 24px; }
+.sl-empty { text-align: center; padding: 20px; color: #b2bec3; font-size: 14px; }
+.sl-group { margin-bottom: 14px; }
+.sl-recipe-name { font-size: 13px; font-weight: 600; color: #2d3436; padding: 6px 0 4px; border-bottom: 1px solid #f0f2f5; margin-bottom: 6px; }
+.sl-no-ing { font-size: 12px; color: #b2bec3; padding: 4px 0; }
+.sl-item { padding: 5px 8px; font-size: 14px; color: #636e72; }
+.sl-item::before { content: '• '; color: #7761e5; }
+.copy-btn { margin-top: 16px; width: 100%; padding: 12px 0; background: #7761e5; color: #fff; border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.copy-btn:hover { background: #6350d0; }
 </style>

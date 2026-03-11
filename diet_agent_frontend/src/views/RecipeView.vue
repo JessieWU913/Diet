@@ -64,11 +64,21 @@
     <div v-if="Object.keys(exportedMeals).length > 0" class="exported-section">
       <h3>📥 AI 导出的菜谱</h3>
       <div v-for="(recipes, date) in exportedMeals" :key="date" class="exported-day">
-        <h4>{{ date }}</h4>
-        <div v-for="r in recipes" :key="r.id" class="exported-card">
-          <span class="ec-name">{{ r.name }}</span>
-          <span class="ec-cal">{{ r.calories }} kcal</span>
-          <button class="ec-fav" @click="addToCollection(r)">⭐ 收藏</button>
+        <h4 class="ed-date">{{ date }}</h4>
+        <div class="exported-grid">
+          <div v-for="r in recipes" :key="r.id" class="exported-card">
+            <div class="ec-name">{{ r.name }}</div>
+            <div class="ec-macros">
+              <span>🔥 {{ r.calories || '—' }} kcal</span>
+              <span v-if="r.protein">💪 {{ r.protein }}g 蛋白</span>
+              <span v-if="r.fat">🫒 {{ r.fat }}g 脂肪</span>
+              <span v-if="r.carbs">🌾 {{ r.carbs }}g 碳水</span>
+            </div>
+            <div class="ec-actions">
+              <button class="ec-detail" @click="viewDetail(r)">📖 查看做法</button>
+              <button class="ec-fav" @click="addToCollection(r)">⭐ 收藏</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -123,12 +133,49 @@ const mealSections = [
   { key: 'dinner', label: '晚餐', icon: '🌙' },
 ]
 
-// 读取 AI 导出的菜谱
+// 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
 const exportedMeals = ref({})
-const loadExportedMeals = () => {
+const loadExportedMeals = async () => {
   const key = `diet_meals_${userId || 'guest'}`
   const data = localStorage.getItem(key)
-  if (data) exportedMeals.value = JSON.parse(data)
+  if (!data) return
+  const parsed = JSON.parse(data)
+
+  // 收集所有缺少营养信息的菜名
+  const needLookup = []
+  for (const date in parsed) {
+    for (const r of parsed[date]) {
+      if (!r.calories || r.calories === 0) needLookup.push(r.name)
+    }
+  }
+
+  // 批量查询数据库
+  if (needLookup.length > 0) {
+    try {
+      const res = await API.post('/recipe/', { names: [...new Set(needLookup)] })
+      const dbMap = {}
+      for (const item of (res.data.data || [])) {
+        dbMap[item.name] = item
+      }
+      // 回填营养数据并更新 localStorage
+      for (const date in parsed) {
+        for (const r of parsed[date]) {
+          if ((!r.calories || r.calories === 0) && dbMap[r.name]) {
+            const db = dbMap[r.name]
+            r.calories = db.calories || 0
+            r.protein = db.protein || 0
+            r.fat = db.fat || 0
+            r.carbs = db.carbs || 0
+            r.ingredients = db.ingredients || ''
+            r.steps = db.steps || ''
+          }
+        }
+      }
+      localStorage.setItem(key, JSON.stringify(parsed))
+    } catch (e) { console.error('补全菜谱信息失败', e) }
+  }
+
+  exportedMeals.value = parsed
 }
 
 const loadRecommendations = async () => {
@@ -232,11 +279,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.recipe-view { max-width: 1000px; margin: 0 auto; }
+.recipe-view { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 22px; color: #2d3436; }
-.refresh-btn { padding: 10px 20px; background: #27ae60; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
-.refresh-btn:hover { background: #219a52; }
+.refresh-btn { padding: 10px 20px; background: #7761e5; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.refresh-btn:hover { background: #6350d0; }
 .refresh-btn:disabled { background: #95a5a6; }
 
 .filter-bar { display: flex; align-items: flex-end; gap: 16px; background: #fff; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.04); flex-wrap: wrap; }
@@ -261,22 +308,27 @@ onMounted(() => {
 .macro { font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #f8f9fa; color: #636e72; }
 .rc-actions { display: flex; gap: 6px; }
 .rc-add, .rc-detail { padding: 6px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
-.rc-add:hover { background: #e8f5e9; border-color: #27ae60; color: #27ae60; }
-.rc-detail:hover { background: #e3f2fd; border-color: #2196f3; color: #2196f3; }
+.rc-add:hover { background: #ede9fc; border-color: #7761e5; color: #7761e5; }
+.rc-detail:hover { background: #e6f2fe; border-color: #8ac3f9; color: #2b7de9; }
 .rc-fav { padding: 6px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
-.rc-fav:hover { background: #fff8e1; border-color: #ffa000; color: #ffa000; }
+.rc-fav:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }
 
 .mc-subtotal { margin-top: 12px; padding-top: 12px; border-top: 2px solid #f0f2f5; font-size: 14px; font-weight: 600; color: #636e72; text-align: right; }
 
 .exported-section { margin-top: 32px; }
 .exported-section h3 { font-size: 18px; color: #2d3436; margin-bottom: 16px; }
-.exported-day { margin-bottom: 16px; }
-.exported-day h4 { font-size: 14px; color: #636e72; margin-bottom: 8px; }
-.exported-card { display: flex; justify-content: space-between; background: #fff; padding: 12px 16px; border-radius: 10px; margin-bottom: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
-.ec-name { font-weight: 500; color: #2d3436; }
-.ec-cal { color: #636e72; font-size: 13px; }
-.ec-fav { padding: 4px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; flex-shrink: 0; }
-.ec-fav:hover { background: #fff8e1; border-color: #ffa000; color: #ffa000; }
+.exported-day { margin-bottom: 20px; }
+.ed-date { font-size: 14px; color: #636e72; margin-bottom: 10px; font-weight: 600; }
+.exported-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.exported-card { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 8px; }
+.ec-name { font-weight: 600; color: #2d3436; font-size: 15px; }
+.ec-macros { display: flex; flex-wrap: wrap; gap: 4px; }
+.ec-macros span { font-size: 11px; padding: 3px 8px; background: #f8f9fa; border-radius: 8px; color: #636e72; }
+.ec-actions { display: flex; gap: 6px; margin-top: 2px; }
+.ec-detail { padding: 5px 10px; border: 1px solid #2196f3; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #2196f3; transition: .2s; }
+.ec-detail:hover { background: #e3f2fd; }
+.ec-fav { padding: 5px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
+.ec-fav:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }
 
 /* 详情弹窗 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -290,7 +342,7 @@ onMounted(() => {
 .dm-section { margin-bottom: 20px; }
 .dm-section h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
 .dm-loading { text-align: center; padding: 20px; color: #b2bec3; }
-.dm-content :deep(.ing-tag) { display: inline-block; background: #e8f5e9; color: #27ae60; padding: 3px 10px; border-radius: 12px; margin: 2px 4px; font-size: 13px; }
+.dm-content :deep(.ing-tag) { display: inline-block; background: #ede9fc; color: #7761e5; padding: 3px 10px; border-radius: 12px; margin: 2px 4px; font-size: 13px; }
 .dm-content :deep(ol) { padding-left: 20px; }
 .dm-content :deep(li) { margin-bottom: 8px; color: #2d3436; line-height: 1.6; }
 </style>
