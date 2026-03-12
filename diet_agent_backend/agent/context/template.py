@@ -15,7 +15,6 @@ from datetime import datetime
 class PromptTemplate:
     """6 段式结构化 system prompt 构建器"""
 
-    # ========== [Role & Policies] 稳定层 ==========
     ROLE_AND_POLICIES = """你是一个连接了 Neo4j 专业营养知识图谱的膳食健康助手。
 你的任务是根据图谱返回的【真实数据】为用户提供饮食建议。
 
@@ -26,7 +25,6 @@ class PromptTemplate:
 4. 调用 vector_search_recipe 时 query 只填正向需求词，忌口放 exclude_ingredients。
 5. search_recipe_by_ingredients 未命中时，必须降级到 vector_search_recipe 二次搜索。"""
 
-    # ========== [Output] 输出约束 ==========
     OUTPUT_STYLE = """【回复风格】：像朋友一样亲切，但像医生一样专业。"""
 
     @classmethod
@@ -110,5 +108,5 @@ class PromptTemplate:
             cls.build_context_section(memory_prompt),
             cls.build_output_section(),
         ]
-        # 过滤空段落，用双换行分隔
+
         return "\n\n".join(s for s in sections if s)

@@ -1,5 +1,5 @@
 """
-TokenBudget — token 估算与预算守卫
+TokenBudget — token 估算
 
 中文约 1.5 token/字，英文约 1.3 token/word。
 采用保守估算策略，确保不超出模型上下文窗口。
@@ -13,12 +13,12 @@ class TokenBudget:
         self.total_limit = total_limit
         # 各区块预算分配 (百分比)
         self.allocations = {
-            "role":     0.10,   # [角色与策略] 稳定层 ~200 tokens
-            "task":     0.05,   # [任务] 当前轮用户消息
-            "state":    0.20,   # [状态] 用户画像 + 减脂指标
-            "evidence": 0.25,   # [证据] 工具返回 + 知识图谱
-            "context":  0.30,   # [上下文] 对话历史
-            "output":   0.10,   # [输出] 格式要求
+            "role":     0.10,
+            "task":     0.05,
+            "state":    0.20,
+            "evidence": 0.25,
+            "context":  0.30,
+            "output":   0.10,
         }
 
     def estimate_tokens(self, text: str) -> int:
@@ -27,7 +27,7 @@ class TokenBudget:
             return 0
         chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
         non_chinese = len(text) - chinese_chars
-        # 英文部分按字符 / 4 近似 word count
+        # 英文部分按字符/4 近似 word count
         return int(chinese_chars * 1.5 + non_chinese * 0.4)
 
     def get_budget(self, section: str) -> int:
@@ -42,7 +42,7 @@ class TokenBudget:
         if current <= budget:
             return text
 
-        # 按比例截断，保留后半部分（最新的内容更重要）
+        # 按比例截断，保留后半部分
         ratio = budget / max(current, 1)
         keep_chars = int(len(text) * ratio)
         return "...(已压缩)\n" + text[-keep_chars:]

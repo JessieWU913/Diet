@@ -39,43 +39,39 @@ class ContextBuilder:
         self.max_history = max_history
         self.budget = TokenBudget(total_limit=max_tokens)
 
-    # ================================================================
-    # G — Gather: 收集所有原始上下文碎片
-    # ================================================================
+    # Gather: 收集所有原始上下文碎片
     def _gather(self) -> dict:
         """从各个记忆层收集原始信息"""
         fragments = {}
 
-        # 1. 语义记忆（用户画像 + 忌口 + 负面反馈）
+        # 语义记忆（用户画像 + 忌口 + 负面反馈）
         profile_data = SemanticMemory.get_user_profile(self.user_id)
         fragments["profile"] = profile_data or {}
 
-        # 2. 情景记忆（近期饮食记录）
+        # 情景记忆（近期饮食记录）
         fragments["recent_meals"] = EpisodicMemory.get_recent_meals(
             self.user_id, days_limit=3
         )
 
-        # 3. 当前会话传入的 profile（前端直接传的身高体重等）
+        # 当前会话传入前端的身高体重等
         fragments["session_profile"] = self.profile
 
         return fragments
 
-    # ================================================================
-    # S — Select: 按价值评分，只保留高价值碎片
-    # ================================================================
+    # Select: 按价值评分，只保留高价值碎片
     def _select(self, fragments: dict) -> dict:
         """根据用户模式和相关性，过滤 / 优先排序碎片"""
         selected = {}
 
-        # --- 合并 profile 数据（session 覆盖 graph 数据）---
+        # 合并profile数据
         merged_profile = {**fragments["profile"], **fragments["session_profile"]}
         selected["profile"] = merged_profile
 
-        # --- 负面反馈：只保留最近 3 条（避免 prompt 膨胀）---
+        # 负反馈只保留最近3条
         neg = merged_profile.get("negative_feedback", [])
         selected["negative_feedback"] = neg[-3:] if neg else []
 
-        # --- 情景记忆：减脂模式下保留 3 天，普通模式 2 天 ---
+        # 情景记忆：减脂模式下保留3天，普通模式2天
         meals = fragments["recent_meals"]
         if self.user_mode != "weight_loss" and len(meals) > 2:
             meals = meals[:2]
@@ -83,12 +79,10 @@ class ContextBuilder:
 
         return selected
 
-    # ================================================================
-    # S — Structure: 组装为 6 段式结构化 prompt
-    # ================================================================
+    # Structure: 组装为6段式结构化prompt
     def _structure(self, selected: dict) -> str:
         """将筛选后的碎片注入 PromptTemplate"""
-        # 构建 memory_prompt（[Context] 区块）
+        # 构建memory_prompt（Context区块）
         memory_lines = []
 
         profile = selected["profile"]
@@ -120,39 +114,34 @@ class ContextBuilder:
 
         memory_prompt = "\n".join(memory_lines)
 
-        # 用 PromptTemplate 组装 6 段式
+        # PromptTemplate组装
         return PromptTemplate.assemble(
             user_mode=self.user_mode,
             profile=self.profile,
             memory_prompt=memory_prompt,
         )
 
-    # ================================================================
-    # C — Compress: token 预算守卫
-    # ================================================================
+    # Compress: token 预算
     def _compress_prompt(self, prompt: str) -> str:
         """如果 system prompt 超预算，逐层压缩"""
-        # system prompt 占 role + state + context + output 四段
-        # 分配约 70% 给 system prompt，30% 留给对话历史
+        # system prompte分role+state+context+output
+        # 分配约70%给system prompt，30%留给对话历史
         system_budget = int(self.budget.total_limit * 0.7)
         current = self.budget.estimate_tokens(prompt)
 
         if current <= system_budget:
             return prompt
 
-        # 超预算 → 尝试裁剪 [Context] 中的情景记忆
         # 找到情景记忆段并截断
         marker = "【情景记忆 - 近期饮食记录】"
         if marker in prompt:
             idx = prompt.index(marker)
-            # 找下一个 【 段落标记 或末尾
             next_section = prompt.find("\n【", idx + len(marker))
             if next_section == -1:
                 next_section = len(prompt)
-            # 截取情景记忆段
             episode_block = prompt[idx:next_section]
             lines = episode_block.split("\n")
-            # 只保留标题 + 最近 1 天
+            # 只保留标题和最近1天
             if len(lines) > 3:
                 trimmed = "\n".join(lines[:3]) + "\n- ...(更早记录已省略)"
                 prompt = prompt[:idx] + trimmed + prompt[next_section:]
@@ -169,7 +158,6 @@ class ContextBuilder:
         if len(compressed) > self.max_history:
             compressed = compressed[-self.max_history:]
 
-        # 清理开头的孤立 ToolMessage / SystemMessage
         while compressed:
             first = compressed[0]
             if isinstance(first, (ToolMessage, SystemMessage)):
@@ -181,9 +169,7 @@ class ContextBuilder:
 
         return compressed
 
-    # ================================================================
     # 统一构建入口
-    # ================================================================
     def build(self, messages: list) -> tuple[str, list]:
         """
         执行完整 GSSC 管线。
@@ -191,16 +177,12 @@ class ContextBuilder:
         返回:
             (system_prompt, compressed_messages)
         """
-        # G — Gather
         fragments = self._gather()
 
-        # S — Select
         selected = self._select(fragments)
 
-        # S — Structure
         system_prompt = self._structure(selected)
 
-        # C — Compress
         system_prompt = self._compress_prompt(system_prompt)
         compressed_messages = self._compress_messages(messages)
 
