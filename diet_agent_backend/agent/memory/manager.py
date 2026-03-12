@@ -17,7 +17,7 @@ class MemoryManager:
         if not profile:
             return "当前为未登录访客，无历史记忆数据。"
 
-        # 1. 基础画像记忆
+        # 基础画像记忆
         name = profile.get("name", "用户")
         allergies = profile.get("allergies", [])
         dislikes = profile.get("dislikes", [])
@@ -29,10 +29,10 @@ class MemoryManager:
             f"- 明确忌口/过敏源：{avoid_str}",
         ]
 
-        # 2. 负面反馈记忆 (RLHF 进化机制)
+        # 负面反馈记忆
         negative_feedback = profile.get("negative_feedback", [])
         if negative_feedback:
-            # 提取最近的 3 次教训防止过长
+            # 提取最近的3次教训
             recent_lessons = "\n".join([f"  * {item}" for item in negative_feedback[-3:]])
             prompt_lines.append("\n【长期记忆 - 历史教训】：")
             prompt_lines.append("该用户曾对你的推荐给出过极度不满的负面反馈。在本次对话中，你必须主动避开以下雷区：")

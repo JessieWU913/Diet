@@ -59,7 +59,6 @@ class EpisodicMemory:
         """
         try:
             results = graph_db.query(cypher, {"user_id": user_id, "limit": days_limit})
-            # 格式化成易读的字符串，如：["2026-03-05: 炒白菜, 红烧肉"]
             formatted_history = [f"{record['date']}安排了: {', '.join(record['recipes'])}" for record in results]
             return formatted_history
         except Exception as e:
