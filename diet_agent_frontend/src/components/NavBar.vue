@@ -6,16 +6,15 @@
     </div>
 
     <div class="nav-links">
-      <router-link to="/chat">🏠 主页/对话</router-link>
-      <router-link to="/meal">📅 菜谱单</router-link>
-      <router-link to="/stats">📊 热量统计</router-link>
-      <router-link to="/profile">👤 个人中心</router-link>
+      <router-link to="/chat">主页/对话</router-link>
+      <router-link to="/meal">菜谱单</router-link>
+      <router-link to="/stats">热量统计</router-link>
+      <router-link to="/profile">个人中心</router-link>
     </div>
   </nav>
 </template>
 
 <style scoped>
-/* 保持你之前的样式不变即可 */
 .navbar { display: flex; justify-content: space-between; align-items: center; padding: 0 40px; height: 60px; background-color: #ffffff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); z-index: 10; }
 .logo { display: flex; align-items: center; gap: 8px; }
 .logo .icon { font-size: 24px; }

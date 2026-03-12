@@ -1,20 +1,20 @@
 <template>
   <div class="chat-view">
-    <!-- 左侧：个性化推荐面板 -->
+
     <aside class="side-panel">
-      <h3>🎯 个性化偏好</h3>
+      <h3>个性化偏好</h3>
 
       <!-- 模式切换 -->
       <div class="mode-block">
         <label class="mode-toggle" @click="toggleMode">
           <span class="mode-dot" :class="{ active: isWeightLossMode }"></span>
-          <span>{{ isWeightLossMode ? '🔥 减脂模式' : '🍽️ 标准模式' }}</span>
+          <span>{{ isWeightLossMode ? '减脂模式' : '标准模式' }}</span>
         </label>
       </div>
 
       <!-- 偏好食材 -->
       <div class="fav-section">
-        <h4>💚 偏好食材 <span class="fav-hint">(会自动融入对话)</span></h4>
+        <h4>偏好食材 <span class="fav-hint">(会自动融入对话)</span></h4>
         <div class="tag-cloud">
           <span v-for="tag in favorites" :key="tag" class="fav-tag">
             {{ tag }}
@@ -29,8 +29,8 @@
 
       <!-- 历史对话 -->
       <div class="history-section">
-        <h4>💬 历史对话</h4>
-        <button class="new-chat-btn" @click="startNewChat">✨ 新对话</button>
+        <h4>历史对话</h4>
+        <button class="new-chat-btn" @click="startNewChat">新对话</button>
         <div v-for="s in chatSessions" :key="s.session_id" class="session-item" :class="{ active: s.session_id === currentSessionId }" @click="loadSession(s)">
           <span class="si-title">{{ s.title }}</span>
           <span class="si-date">{{ formatSessionDate(s.created_at) }}</span>
@@ -45,33 +45,29 @@
       </div>
     </aside>
 
-    <!-- 右侧：Gemini 风格 AI 对话框 -->
     <main class="chat-main">
       <div class="chat-messages" ref="chatWindowRef">
         <div v-for="(msg, idx) in messages" :key="idx" :class="['msg-row', msg.role === 'user' ? 'is-user' : 'is-ai']">
           <div class="msg-avatar">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
           <div class="msg-body">
-            <!-- DeepSeek 风格：思考过程（灰色小字，可折叠） -->
             <div v-if="msg.thinking" class="thinking-block">
               <div class="thinking-toggle" @click="msg.thinkingCollapsed = !msg.thinkingCollapsed">
-                <span class="thinking-label">🤔 深度思考</span>
+                <span class="thinking-label">深度思考</span>
                 <span class="tk-chevron">{{ msg.thinkingCollapsed ? '▸ 展开' : '▾ 收起' }}</span>
               </div>
               <div v-if="!msg.thinkingCollapsed" class="thinking-content">{{ msg.thinking }}</div>
             </div>
-            <!-- 正式回答（Markdown 渲染，黑色正式字体） -->
             <div class="msg-content" v-html="formatMessage(msg.answer || msg.content)"></div>
 
-            <!-- 菜谱导出 -->
             <div v-if="msg.role === 'assistant' && isRecipeReply(msg)" class="export-block">
               <div v-if="!msg.exported" class="export-prompt">
-                <span>🍱 检测到菜谱推荐</span>
+                <span>检测到菜谱推荐</span>
                 <div class="export-row">
                   <input type="date" v-model="msg.exportDate" class="date-input" />
-                  <button class="export-btn" @click="exportToMenu(msg)">📥 导出至食谱推荐</button>
+                  <button class="export-btn" @click="exportToMenu(msg)">导出至食谱推荐</button>
                 </div>
               </div>
-              <div v-else class="export-done">✅ 已导出至食谱推荐页</div>
+              <div v-else class="export-done">已导出至食谱推荐页</div>
             </div>
 
             <!-- 反馈按钮 -->
@@ -92,14 +88,12 @@
           </div>
         </div>
 
-        <!-- Loading -->
         <div v-if="isLoading" class="msg-row is-ai">
           <div class="msg-avatar">AI</div>
           <div class="msg-body loading-dots"><span></span><span></span><span></span></div>
         </div>
       </div>
 
-      <!-- 输入框 -->
       <div class="chat-input-area">
         <input v-model="userInput" @keyup.enter="sendMessage" placeholder="说点什么吧，例如：推荐一道低卡晚餐..." :disabled="isLoading" />
         <button @click="sendMessage" :disabled="isLoading || !userInput.trim()">发送</button>
@@ -125,7 +119,6 @@ const messages = ref([
   { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！我是智能膳食助手。告诉我你想吃什么，或者冰箱有什么食材，我来帮你搭配！`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
 ])
 
-// 解析 DeepSeek 思考过程
 const parseAIResponse = (text) => {
   if (!text) return { thinking: '', answer: '' }
   const match = text.match(/<think>([\s\S]*?)<\/think>/i)
@@ -483,7 +476,6 @@ onMounted(() => {
 .r-tag:hover { border-color: #e74c3c; color: #e74c3c; background: #fdf0ed; }
 .fb-thanks { margin-top: 8px; font-size: 12px; color: #4aa458; font-weight: 600; }
 
-/* 输入区 */
 .chat-input-area { display: flex; padding: 16px 24px; background: #fff; border-top: 1px solid #f0f2f5; gap: 12px; }
 .chat-input-area input { flex: 1; padding: 14px 18px; border: 1px solid #dfe6e9; border-radius: 12px; font-size: 14px; outline: none; background: #f8f9fa; transition: .2s; }
 .chat-input-area input:focus { border-color: #7761e5; background: #fff; box-shadow: 0 0 0 3px rgba(119,97,229,.12); }

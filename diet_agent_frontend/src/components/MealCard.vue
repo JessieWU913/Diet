@@ -3,7 +3,7 @@
     <div class="card-header" @click="isExpanded = !isExpanded">
       <div class="title-area">
         <h4 class="dish-name">{{ recipe.name }}</h4>
-        <span class="calories">🔥 {{ recipe.calories }} kcal</span>
+        <span class="calories">{{ recipe.calories }} kcal</span>
       </div>
       <div class="header-actions">
         <span class="expand-icon" v-if="!isExporting">{{ isExpanded ? '收起 ▴' : '展开 ▾' }}</span>
@@ -15,8 +15,8 @@
         <div class="divider"></div>
 
         <div class="card-toolbar" v-if="!isExporting">
-          <button class="tool-btn export" @click.stop="exportCardImage">📸 存为图片</button>
-          <button class="tool-btn delete" @click.stop="deleteCard">🗑️ 删除该菜</button>
+          <button class="tool-btn export" @click.stop="exportCardImage">存为图片</button>
+          <button class="tool-btn delete" @click.stop="deleteCard">删除该菜</button>
         </div>
 
         <div class="details-content" v-html="formattedDetails"></div>
@@ -38,7 +38,7 @@ const emit = defineEmits(['delete'])
 
 const cardRef = ref(null)
 const isExpanded = ref(false)
-const isExporting = ref(false) // 🌟 核心：截图状态锁
+const isExporting = ref(false)
 
 const formattedDetails = computed(() => {
   return marked.parse(props.recipe.details || '暂无详细做法')
@@ -50,22 +50,19 @@ const deleteCard = () => {
   }
 }
 
-// 🌟 解决滚动条截取不全的完美导出逻辑
 const exportCardImage = async () => {
   if (!cardRef.value || isExporting.value) return
 
   const originalExpanded = isExpanded.value
-  isExporting.value = true // 触发 CSS 去除高度限制和隐藏按钮
+  isExporting.value = true
 
-  // 等待 Vue 重新渲染 DOM
   await nextTick()
-  // 额外等待 100ms 确保 CSS 动画不再干扰
   await new Promise(resolve => setTimeout(resolve, 100))
 
   try {
     const canvas = await html2canvas(cardRef.value, {
       backgroundColor: '#ffffff',
-      scale: 2, // 视网膜高清
+      scale: 2,
       useCORS: true
     })
     const link = document.createElement('a')
@@ -76,7 +73,7 @@ const exportCardImage = async () => {
     alert("生成图片失败！")
     console.error(err)
   } finally {
-    isExporting.value = false // 恢复原状
+    isExporting.value = false
     isExpanded.value = originalExpanded
   }
 }
@@ -113,13 +110,10 @@ const exportCardImage = async () => {
 .expand-enter-active, .expand-leave-active { transition: all 0.3s ease; max-height: 600px; opacity: 1; }
 .expand-enter-from, .expand-leave-to { max-height: 0; opacity: 0; }
 
-/* ===================================== */
-/* 🌟 核心：截图导出时的覆写样式 */
-/* ===================================== */
 .export-mode { box-shadow: none !important; border: 1px solid #eee; }
 .export-mode .card-details { transition: none !important; }
 .export-mode .details-content {
-  max-height: none !important; /* 解除高度限制，保证截图不丢失内容 */
-  overflow: visible !important; /* 取消滚动条 */
+  max-height: none !important;
+  overflow: visible !important;
 }
 </style>

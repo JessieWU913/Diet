@@ -10,7 +10,7 @@
         <label>
           <input type="checkbox" v-model="isWeightLossMode" />
           <span class="slider" :class="{ active: isWeightLossMode }">
-            {{ isWeightLossMode ? '🔥 严格减脂模式' : '🍽️ 日常标准模式' }}
+            {{ isWeightLossMode ? '严格减脂模式' : '日常标准模式' }}
           </span>
         </label>
       </div>
@@ -29,14 +29,14 @@
 
           <div v-if="msg.role === 'assistant' && isRecipeRecommendation(msg.content)" class="export-module">
             <div v-if="!msg.exported" class="export-prompt">
-              <p>🍱 检测到菜谱推荐，是否加入您的菜谱单？</p>
+              <p>检测到菜谱推荐，是否加入您的菜谱单？</p>
               <div class="export-controls">
                 <input type="date" v-model="msg.exportDate" class="mini-date" />
-                <button class="export-btn" @click="exportToMenu(msg)">📥 导出完整做法</button>
+                <button class="export-btn" @click="exportToMenu(msg)">导出完整做法</button>
               </div>
             </div>
             <div v-else class="export-success">
-              ✅ 已成功导出至 {{ msg.exportDate }} <router-link to="/meals">去查看</router-link>
+              已成功导出至 {{ msg.exportDate }} <router-link to="/meals">去查看</router-link>
             </div>
           </div>
 
@@ -56,10 +56,10 @@
           <div v-if="msg.showReasonOptions && !msg.feedbackSubmitted" class="reason-selector">
             <p class="reason-title">请告诉我们原因，Agent 会将其写入图谱黑名单：</p>
             <div class="reason-tags">
-              <span class="r-tag" @click="submitFeedback(msg, '推荐的菜品难吃，加入黑名单')">🚫 菜品拉黑</span>
-              <span class="r-tag" @click="submitFeedback(msg, '烹饪做法太油腻/不健康')">🛢️ 做法太油腻</span>
-              <span class="r-tag" @click="submitFeedback(msg, '热量或分量不符合我的减脂预期')">⚖️ 热量不符</span>
-              <span class="r-tag" @click="submitFeedback(msg, '推荐的食物吃不饱，缺乏饱腹感')">🥣 吃不饱</span>
+              <span class="r-tag" @click="submitFeedback(msg, '推荐的菜品难吃，加入黑名单')">菜品拉黑</span>
+              <span class="r-tag" @click="submitFeedback(msg, '烹饪做法太油腻/不健康')">做法太油腻</span>
+              <span class="r-tag" @click="submitFeedback(msg, '热量或分量不符合我的减脂预期')">热量不符</span>
+              <span class="r-tag" @click="submitFeedback(msg, '推荐的食物吃不饱，缺乏饱腹感')">吃不饱</span>
             </div>
           </div>
 
@@ -95,7 +95,7 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
-import { marked } from 'marked' // 引入 Markdown 解析库
+import { marked } from 'marked'
 
 // --- 状态管理 ---
 const messages = ref([
@@ -133,7 +133,7 @@ const scrollToBottom = async () => {
 }
 
 // ==========================================
-// 🌟 核心：发送聊天消息
+// 核心：发送聊天消息
 // ==========================================
 const sendMessage = async () => {
   const text = userInput.value.trim()
@@ -237,7 +237,6 @@ const exportToMenu = async (msg) => {
         savedData[msg.exportDate] = [];
       }
 
-      // 🚀 核心修复：把辣眼睛的 JSON 字符串翻译成人类看的 Markdown
       const formattedRecipes = resData.data.map(item => {
         let detailsMd = '';
 
@@ -246,29 +245,25 @@ const exportToMenu = async (msg) => {
           try {
             // 尝试把图谱里的 JSON 字符串解析为数组
             const ingArray = JSON.parse(item.ingredients);
-            // 遍历数组，提取 raw_text（如 "田鸡 200克"），拼成圆点列表
             const ingList = ingArray.map(ing => `- ${ing.raw_text}`).join('\n');
-            detailsMd += `**🛒 食材清单**：\n${ingList}\n\n`;
+            detailsMd += `**食材清单**：\n${ingList}\n\n`;
           } catch (e) {
-            // 如果解析失败（说明存进去的本来就是纯文本），就直接展示
-            detailsMd += `**🛒 食材清单**：\n${item.ingredients}\n\n`;
+            detailsMd += `**食材清单**：\n${item.ingredients}\n\n`;
           }
         }
 
-        // 2. 处理烹饪步骤
         if (item.steps) {
           try {
-            // 防止步骤也是 JSON 数组，做个兼容处理
             const stepArray = JSON.parse(item.steps);
             if (Array.isArray(stepArray)) {
                const stepList = stepArray.map((step, idx) => `${idx + 1}. ${step}`).join('\n');
-               detailsMd += `**🍳 烹饪步骤**：\n${stepList}`;
+               detailsMd += `**烹饪步骤**：\n${stepList}`;
             } else {
-               detailsMd += `**🍳 烹饪步骤**：\n${item.steps}`;
+               detailsMd += `**烹饪步骤**：\n${item.steps}`;
             }
           } catch (e) {
             // 普通文本直接展示
-            detailsMd += `**🍳 烹饪步骤**：\n${item.steps}`;
+            detailsMd += `**烹饪步骤**：\n${item.steps}`;
           }
         }
 
@@ -331,9 +326,6 @@ const submitFeedback = async (msg, reason) => {
 </script>
 
 <style scoped>
-/* ===================================== */
-/* 整体布局与聊天气泡样式 */
-/* ===================================== */
 .chat-box-container {
   display: flex; flex-direction: column; width: 100%; max-width: 800px; height: 85vh;
   background: #ffffff; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); overflow: hidden;
@@ -385,9 +377,7 @@ const submitFeedback = async (msg, reason) => {
 .dot:nth-child(2) { animation-delay: -0.16s; }
 @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-/* ===================================== */
-/* 🌟 菜谱导出模块样式 */
-/* ===================================== */
+/* 菜谱导出模块样式 */
 .export-module { margin-top: 15px; padding-top: 12px; border-top: 1px dashed #e1e8ed; }
 .export-prompt p { font-size: 13px; color: #e67e22; margin: 0 0 8px 0; font-weight: bold; }
 .export-controls { display: flex; gap: 10px; align-items: center; }
@@ -397,9 +387,7 @@ const submitFeedback = async (msg, reason) => {
 .export-success { font-size: 13px; color: #27ae60; font-weight: bold; }
 .export-success a { color: #3498db; margin-left: 10px; text-decoration: none; }
 
-/* ===================================== */
-/* 🌟 RLHF 反馈系统专区样式 */
-/* ===================================== */
+/* RLHF 反馈系统 */
 .feedback-actions { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #eaeaea; }
 .feedback-actions button {
   background: none; border: 1px solid #dfe6e9; padding: 4px 12px; border-radius: 12px;
@@ -419,9 +407,7 @@ const submitFeedback = async (msg, reason) => {
 .r-tag:hover { border-color: #e74c3c; color: #e74c3c; background-color: #fdf0ed; }
 .feedback-thanks { margin-top: 10px; font-size: 12px; color: #27ae60; font-weight: bold; }
 
-/* ===================================== */
 /* 底部输入框 */
-/* ===================================== */
 .chat-footer { display: flex; padding: 15px 20px; background: #ffffff; border-top: 1px solid #eaeaea; gap: 12px; }
 .chat-footer input {
   flex: 1; padding: 12px 16px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 14px;
