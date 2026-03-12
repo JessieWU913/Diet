@@ -71,14 +71,13 @@ const router = useRouter()
 
 const isLoginMode = ref(true)
 const userId = ref('')
-const password = ref('') // 🌟 新增密码状态
-const confirmPassword = ref('') // 🌟 新增确认密码状态
+const password = ref('')
+const confirmPassword = ref('')
 const userName = ref('')
 const loading = ref(false)
 
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value
-  // 切换模式时清空所有表单
   userId.value = ''
   password.value = ''
   confirmPassword.value = ''
@@ -86,7 +85,6 @@ const toggleMode = () => {
 }
 
 const handleSubmit = async () => {
-  // 🌟 强行剔除首尾的隐形空格
   const cleanUserId = userId.value.trim()
   const cleanPassword = password.value.trim()
   const cleanConfirm = confirmPassword.value.trim()

@@ -1,17 +1,17 @@
 <template>
   <div class="profile-container">
     <div class="profile-card">
-      <h2>👤 个人健康中心</h2>
+      <h2>个人健康中心</h2>
       <p class="subtitle">完善健康画像，让 Agent 更精准</p>
 
       <form @submit.prevent="saveProfile" class="profile-form">
         <div class="form-row">
           <div class="form-group">
-            <label>🎂 出生日期</label>
+            <label>出生日期</label>
             <input type="date" v-model="profile.birthDate" class="form-control" required />
           </div>
           <div class="form-group">
-            <label>🚻 性别</label>
+            <label>性别</label>
             <select v-model="profile.gender" class="form-control">
               <option value="male">男</option>
               <option value="female">女</option>
@@ -21,17 +21,17 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label>📏 身高 (cm)</label>
+            <label>身高 (cm)</label>
             <input type="tel" v-model.number="profile.height" class="form-control" placeholder="例如: 175" required />
           </div>
           <div class="form-group">
-            <label>⚖️ 体重 (kg)</label>
+            <label>体重 (kg)</label>
             <input type="tel" v-model.number="profile.weight" class="form-control" placeholder="例如: 65" required />
           </div>
         </div>
 
         <div class="form-group full-width">
-          <label>🚫 明确过敏源 (输入后按回车添加)</label>
+          <label>明确过敏源 (输入后按回车添加)</label>
           <div class="tag-input-box">
             <span class="tag" v-for="(tag, index) in allergies" :key="index">
               {{ tag }} <span class="remove-tag" @click="removeAllergy(index)">×</span>
@@ -41,7 +41,7 @@
         </div>
 
         <div class="form-group full-width">
-          <label>🤢 不喜欢的食材 (输入后按回车添加)</label>
+          <label>不喜欢的食材 (输入后按回车添加)</label>
           <div class="tag-input-box">
             <span class="tag" v-for="(tag, index) in dislikes" :key="index">
               {{ tag }} <span class="remove-tag" @click="removeDislike(index)">×</span>
@@ -51,7 +51,7 @@
         </div>
 
         <button type="submit" class="save-btn" :disabled="loading">
-          {{ loading ? '图谱写入中...' : '💾 保存健康档案' }}
+          {{ loading ? '图谱写入中...' : '保存健康档案' }}
         </button>
       </form>
     </div>
@@ -67,7 +67,6 @@ const loading = ref(false)
 
 const profile = reactive({ birthDate: '', gender: 'female', height: '', weight: '' })
 
-// 🌟 标签系统状态
 const allergies = ref([])
 const currentAllergy = ref('')
 const dislikes = ref([])

@@ -9,22 +9,22 @@
 
       <nav class="sidebar-nav">
         <router-link to="/diet-log" class="nav-item">
-          <span class="nav-icon">📝</span><span>饮食记录</span>
+          <span class="nav-icon"></span><span>饮食记录</span>
         </router-link>
         <router-link to="/recipes" class="nav-item">
-          <span class="nav-icon">🍽️</span><span>食谱推荐</span>
+          <span class="nav-icon"></span><span>食谱推荐</span>
         </router-link>
         <router-link to="/stats" class="nav-item">
-          <span class="nav-icon">📊</span><span>营养分析</span>
+          <span class="nav-icon"></span><span>营养分析</span>
         </router-link>
         <router-link to="/chat" class="nav-item">
-          <span class="nav-icon">🤖</span><span>AI 助手</span>
+          <span class="nav-icon"></span><span>AI 助手</span>
         </router-link>
         <router-link to="/health-log" class="nav-item">
-          <span class="nav-icon">📖</span><span>健康日志</span>
+          <span class="nav-icon"></span><span>健康日志</span>
         </router-link>
         <router-link to="/favorites" class="nav-item">
-          <span class="nav-icon">⭐</span><span>收藏夹</span>
+          <span class="nav-icon"></span><span>收藏夹</span>
         </router-link>
       </nav>
 
@@ -36,16 +36,14 @@
       </div>
     </aside>
 
-    <!-- 主内容区 -->
     <main :class="$route.path === '/login' ? 'main-full' : 'main-content'">
       <router-view></router-view>
     </main>
 
-    <!-- 个人中心弹窗 -->
     <div v-if="showProfileModal" class="modal-overlay" @click.self="showProfileModal = false">
       <div class="profile-modal">
         <div class="pm-header">
-          <h3>👤 个人中心</h3>
+          <h3>个人中心</h3>
           <button class="close-btn" @click="showProfileModal = false">×</button>
         </div>
         <div class="pm-body">
@@ -220,7 +218,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 #app { display: flex; min-height: 100vh; }
 #app.no-sidebar { display: block; }
 
-/* ========== 侧边栏 ========== */
 .sidebar {
   width: 220px; background: #2d2346; border-right: none;
   display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
@@ -255,11 +252,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 }
 .avatar-name { font-size: 14px; color: rgba(255,255,255,.7); font-weight: 500; }
 
-/* ========== 主内容 ========== */
 .main-content { margin-left: 220px; flex: 1; padding: 24px 28px; min-height: 100vh; width: calc(100vw - 220px); }
 .main-full { width: 100%; }
 
-/* ========== 弹窗 ========== */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.4);
   display: flex; align-items: center; justify-content: center; z-index: 1000;

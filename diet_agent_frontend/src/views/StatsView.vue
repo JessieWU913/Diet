@@ -1,13 +1,12 @@
 <template>
   <div class="stats-view">
     <div class="page-header">
-      <h2>📊 营养分析</h2>
+      <h2>营养分析</h2>
       <div class="period-tabs">
         <button v-for="p in periods" :key="p.days" :class="{ active: days === p.days }" @click="changePeriod(p.days)">{{ p.label }}</button>
       </div>
     </div>
 
-    <!-- 今日概览 -->
     <div class="today-row">
       <div class="today-card" v-for="item in todaySummary" :key="item.label">
         <span class="tc-icon">{{ item.icon }}</span>
@@ -22,7 +21,6 @@
       </div>
     </div>
 
-    <!-- 图表区 -->
     <div class="charts-row">
       <div class="chart-card">
         <h3>每日热量摄入趋势</h3>
@@ -75,10 +73,10 @@ const buildTodaySummary = () => {
   const today = new Date().toISOString().split('T')[0]
   const todayData = rawData.value.find(d => d.date === today) || { calories: 0, protein: 0, fat: 0, carbs: 0 }
   todaySummary.value = [
-    { icon: '🔥', label: '热量', value: Math.round(todayData.calories), goal: goals.calories, unit: 'kcal', pct: Math.min(100, (todayData.calories / goals.calories) * 100), color: '#ff6b6b' },
-    { icon: '💪', label: '蛋白质', value: Math.round(todayData.protein), goal: goals.protein, unit: 'g', pct: Math.min(100, (todayData.protein / goals.protein) * 100), color: '#4ecdc4' },
-    { icon: '🫒', label: '脂肪', value: Math.round(todayData.fat), goal: goals.fat, unit: 'g', pct: Math.min(100, (todayData.fat / goals.fat) * 100), color: '#ffd93d' },
-    { icon: '🌾', label: '碳水', value: Math.round(todayData.carbs), goal: goals.carbs, unit: 'g', pct: Math.min(100, (todayData.carbs / goals.carbs) * 100), color: '#6c5ce7' },
+    { icon: '', label: '热量', value: Math.round(todayData.calories), goal: goals.calories, unit: 'kcal', pct: Math.min(100, (todayData.calories / goals.calories) * 100), color: '#ff6b6b' },
+    { icon: '', label: '蛋白质', value: Math.round(todayData.protein), goal: goals.protein, unit: 'g', pct: Math.min(100, (todayData.protein / goals.protein) * 100), color: '#4ecdc4' },
+    { icon: '', label: '脂肪', value: Math.round(todayData.fat), goal: goals.fat, unit: 'g', pct: Math.min(100, (todayData.fat / goals.fat) * 100), color: '#ffd93d' },
+    { icon: '', label: '碳水', value: Math.round(todayData.carbs), goal: goals.carbs, unit: 'g', pct: Math.min(100, (todayData.carbs / goals.carbs) * 100), color: '#6c5ce7' },
   ]
 }
 

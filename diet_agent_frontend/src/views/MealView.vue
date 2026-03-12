@@ -1,10 +1,10 @@
 <template>
   <div class="meal-view-container">
     <header class="view-header">
-      <h2>📅 个人菜谱单</h2>
+      <h2>个人菜谱单</h2>
       <div class="global-actions">
-        <button class="action-btn list-btn" @click="generateShoppingList">🛒 购物清单</button>
-        <button class="action-btn pic-btn" @click="exportBoardImage">🖼️ 导出总看板</button>
+        <button class="action-btn list-btn" @click="generateShoppingList">购物清单</button>
+        <button class="action-btn pic-btn" @click="exportBoardImage">导出总看板</button>
       </div>
 
       <div class="controls">
@@ -35,7 +35,7 @@
 
     <div class="export-canvas-wrapper" ref="exportBoardRef">
       <div class="ec-header">
-        <h2>📅 个人菜谱单 ({{ viewMode === '1day' ? '单日' : '近3天' }})</h2>
+        <h2>个人菜谱单 ({{ viewMode === '1day' ? '单日' : '近3天' }})</h2>
         <p>生成日期: {{ new Date().toLocaleDateString() }}</p>
       </div>
       <div class="ec-body">
@@ -46,7 +46,7 @@
           <div v-for="recipe in getMealsForDate(date)" :key="'exp'+recipe.id" class="ec-recipe-card">
             <div class="ec-recipe-header">
               <span class="ec-name">{{ recipe.name }}</span>
-              <span class="ec-cal">🔥 {{ recipe.calories }} kcal</span>
+              <span class="ec-cal">{{ recipe.calories }} kcal</span>
             </div>
             <div class="ec-details" v-html="formatCompactDetails(recipe.details)"></div>
           </div>
@@ -57,9 +57,9 @@
     <div v-if="showShoppingModal" class="modal-overlay" @click.self="showShoppingModal = false">
       <div class="modal-content" ref="shoppingModalRef" :class="{ 'export-mode': isExportingList }">
         <div class="modal-header">
-          <h3>🛒 智能购物清单 ({{ viewMode === '1day' ? '单日' : '近3天' }})</h3>
+          <h3>智能购物清单 ({{ viewMode === '1day' ? '单日' : '近3天' }})</h3>
           <div class="header-right" v-if="!isExportingList">
-            <button class="export-list-btn" @click="exportShoppingList">📸 导出长图</button>
+            <button class="export-list-btn" @click="exportShoppingList">导出长图</button>
             <button class="close-btn" @click="showShoppingModal = false">×</button>
           </div>
         </div>
@@ -138,12 +138,10 @@ const removeRecipe = (recipeId, date) => {
   }
 }
 
-// 🌟 核心：将食材列表压扁成“一行文字”，极大地节省截图空间
 const formatCompactDetails = (detailsMd) => {
   if (!detailsMd) return '';
   let compactMd = detailsMd;
 
-  // 使用正则提取 **🛒 食材清单** 到 **🍳 烹饪步骤** 之间的内容
   const ingMatch = compactMd.match(/\*\*🛒 食材清单\*\*：\n([\s\S]*?)(?=\n\n\*\*🍳|\n*$)/);
   if (ingMatch) {
     const listText = ingMatch[1];
@@ -159,7 +157,6 @@ const formatCompactDetails = (detailsMd) => {
   return marked.parse(compactMd);
 }
 
-// 🌟 导出完整的总看板长图
 const exportBoardImage = async () => {
   if (!exportBoardRef.value) return;
   try {
@@ -178,7 +175,6 @@ const exportBoardImage = async () => {
   }
 }
 
-// 🌟 导出购物清单截图
 const exportShoppingList = async () => {
   if (!shoppingModalRef.value) return;
   isExportingList.value = true; // 移除高度限制，准备截长图
@@ -266,9 +262,6 @@ const generateShoppingList = () => {
 .empty-state { text-align: center; color: #95a5a6; padding: 40px 0; font-size: 14px; }
 .empty-state a { color: #42b983; text-decoration: none; font-weight: bold; display: block; margin-top: 8px; }
 
-/* ===================================== */
-/* 🌟 专门用于截图的隐形结构 (不出现在屏幕可视区) */
-/* ===================================== */
 .export-canvas-wrapper {
   position: absolute; top: -9999px; left: -9999px; /* 把元素扔到十万八千里外 */
   width: 800px; background: #f4f7f6; padding: 30px; box-sizing: border-box; z-index: -1;
@@ -288,9 +281,6 @@ const generateShoppingList = () => {
 .ec-details :deep(p) { margin: 0 0 6px 0; }
 .ec-details :deep(strong) { color: #2c3e50; }
 
-/* ===================================== */
-/* 购物清单弹窗样式 */
-/* ===================================== */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: #f8f9fa; border-bottom: 1px solid #eee; }
@@ -311,6 +301,5 @@ const generateShoppingList = () => {
 .item-amount { color: #e67e22; font-weight: bold; font-size: 14px; background: #fff3e0; padding: 2px 8px; border-radius: 6px; }
 .item-recipes { font-size: 12px; color: #7f8c8d; }
 
-/* 🌟 购物清单导出模式：去除高度限制 */
 .export-mode .modal-body { max-height: none !important; overflow: visible !important; }
 </style>

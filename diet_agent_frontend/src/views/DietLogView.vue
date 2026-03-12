@@ -1,7 +1,7 @@
 <template>
   <div class="diet-log">
     <div class="page-header">
-      <h2>📝 饮食记录</h2>
+      <h2>饮食记录</h2>
       <div class="date-nav">
         <button @click="changeDate(-1)">◀</button>
         <input type="date" v-model="selectedDate" />
@@ -29,7 +29,7 @@
         </div>
       </div>
       <!-- 手动添加按钮 -->
-      <button class="manual-add-btn" @click="openManualAdd">✏️ 手动添加食物</button>
+      <button class="manual-add-btn" @click="openManualAdd">手动添加食物</button>
     </div>
 
     <!-- 今日记录 -->
@@ -53,9 +53,8 @@
       </div>
     </div>
 
-    <!-- 每日汇总 -->
     <div class="daily-summary">
-      <h3>📊 每日汇总</h3>
+      <h3>每日汇总</h3>
       <div class="summary-grid">
         <div class="summary-card cal">
           <span class="sc-value">{{ dailyTotals.calories }}</span>
@@ -115,7 +114,7 @@
               <input type="number" v-model.number="addForm.carbs" />
             </div>
           </div>
-          <button class="am-save" @click="confirmAdd">✅ 确认添加</button>
+          <button class="am-save" @click="confirmAdd">确认添加</button>
         </div>
       </div>
     </div>
@@ -129,19 +128,19 @@
         </div>
         <div class="dm-body">
           <div class="dm-macros">
-            <span>🔥 {{ detailItem.calories }} kcal</span>
-            <span>💪 {{ detailItem.protein }}g 蛋白</span>
-            <span>🫒 {{ detailItem.fat }}g 脂肪</span>
-            <span>🌾 {{ detailItem.carbs }}g 碳水</span>
+            <span>{{ detailItem.calories }} kcal</span>
+            <span>{{ detailItem.protein }}g 蛋白</span>
+            <span>{{ detailItem.fat }}g 脂肪</span>
+            <span>{{ detailItem.carbs }}g 碳水</span>
           </div>
           <div v-if="detailLoading" class="dm-loading">加载详情中...</div>
           <div v-else-if="detailRecipe" class="dm-content">
             <div v-if="detailRecipe.ingredients" class="dm-section">
-              <h4>🛒 食材清单</h4>
+              <h4>食材清单</h4>
               <div v-html="formatIngredients(detailRecipe.ingredients)"></div>
             </div>
             <div v-if="detailRecipe.steps" class="dm-section">
-              <h4>🍳 烹饪步骤</h4>
+              <h4>烹饪步骤</h4>
               <div v-html="formatSteps(detailRecipe.steps)"></div>
             </div>
           </div>
@@ -174,10 +173,10 @@ const detailRecipe = ref(null)
 const detailLoading = ref(false)
 
 const mealSections = [
-  { key: 'breakfast', label: '早餐', icon: '🌅' },
-  { key: 'lunch', label: '午餐', icon: '☀️' },
-  { key: 'dinner', label: '晚餐', icon: '🌙' },
-  { key: 'snack', label: '加餐', icon: '🍪' },
+  { key: 'breakfast', label: '早餐', icon: '' },
+  { key: 'lunch', label: '午餐', icon: '' },
+  { key: 'dinner', label: '晚餐', icon: '' },
+  { key: 'snack', label: '加餐', icon: '' },
 ]
 
 let searchTimer = null
@@ -355,7 +354,6 @@ onMounted(() => loadLogs())
 .sc-value { display: block; font-size: 24px; font-weight: 700; color: #2d3436; }
 .sc-label { display: block; font-size: 12px; color: #636e72; margin-top: 4px; }
 
-/* 添加弹窗 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .add-modal { background: #fff; width: 440px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
 .am-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #f0f2f5; }
@@ -370,7 +368,6 @@ onMounted(() => loadLogs())
 .am-save { width: 100%; padding: 12px; background: #7761e5; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
 .am-save:hover { background: #6350d0; }
 
-/* 详情弹窗 */
 .detail-modal { background: #fff; width: 520px; max-height: 80vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
 .dm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #f0f2f5; }
 .dm-header h3 { font-size: 18px; color: #2d3436; }

@@ -1,8 +1,8 @@
 <template>
   <div class="favorites-view">
     <div class="page-header">
-      <h2>⭐ 我的收藏夹</h2>
-      <button class="export-btn" @click="exportShoppingList" :disabled="collections.length === 0">🛒 导出购物清单</button>
+      <h2>我的收藏夹</h2>
+      <button class="export-btn" @click="exportShoppingList" :disabled="collections.length === 0">导出购物清单</button>
     </div>
 
     <div v-if="loading" class="loading-state">加载中...</div>
@@ -15,26 +15,24 @@
         <div class="fc-header">
           <h3>{{ item.recipe_name }}</h3>
           <div class="fc-btns">
-            <button class="fc-detail" @click="viewDetail(item)">📖 查看做法</button>
-            <button class="fc-remove" @click="removeCollection(item.recipe_name)">🗑️ 取消收藏</button>
+            <button class="fc-detail" @click="viewDetail(item)">查看做法</button>
+            <button class="fc-remove" @click="removeCollection(item.recipe_name)">取消收藏</button>
           </div>
         </div>
         <div class="fc-macros">
-          <span>🔥 {{ item.calories || '—' }} kcal</span>
-          <span>💪 {{ item.protein || '—' }}g 蛋白</span>
-          <span>🫒 {{ item.fat || '—' }}g 脂肪</span>
-          <span>🌾 {{ item.carbs || '—' }}g 碳水</span>
+          <span>{{ item.calories || '—' }} kcal</span>
+          <span>{{ item.protein || '—' }}g 蛋白</span>
+          <span>{{ item.fat || '—' }}g 脂肪</span>
+          <span>{{ item.carbs || '—' }}g 碳水</span>
         </div>
 
-        <!-- 食材列表 + 替换 + 冲突 -->
         <div class="fc-ingredients" v-if="item.parsedIngredients && item.parsedIngredients.length > 0">
-          <h4>🛒 食材清单</h4>
+          <h4>食材清单</h4>
           <div v-for="(ing, iIdx) in item.parsedIngredients" :key="iIdx" class="ing-row">
             <span class="ing-name">{{ ing.display }}</span>
-            <button class="ing-replace-btn" @click="findSimilar(item, iIdx, ing.name)">🔄 替换</button>
-            <button class="ing-conflict-btn" @click="checkConflict(item, iIdx, ing.name)">⚠️ 同食禁忌</button>
+            <button class="ing-replace-btn" @click="findSimilar(item, iIdx, ing.name)">替换</button>
+            <button class="ing-conflict-btn" @click="checkConflict(item, iIdx, ing.name)">同食禁忌</button>
 
-            <!-- 替换结果 -->
             <div v-if="ing.showSimilar" class="similar-panel">
               <div v-if="ing.similarLoading" class="sp-loading">搜索中...</div>
               <div v-else-if="ing.similars && ing.similars.length > 0" class="sp-list">
@@ -43,20 +41,18 @@
               <div v-else class="sp-empty">未找到相似食材</div>
             </div>
 
-            <!-- 冲突结果 -->
             <div v-if="ing.showConflict" class="conflict-panel">
               <div v-if="ing.conflictLoading" class="cp-loading">查询中...</div>
               <div v-else-if="ing.conflicts && ing.conflicts.length > 0" class="cp-list">
-                <span v-for="c in ing.conflicts" :key="c" class="cp-tag">🚫 {{ c }}</span>
+                <span v-for="c in ing.conflicts" :key="c" class="cp-tag">{{ c }}</span>
               </div>
-              <div v-else class="cp-safe">✅ 暂无已知同食禁忌</div>
+              <div v-else class="cp-safe">暂无已知同食禁忌</div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 菜谱详情弹窗 -->
     <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
       <div class="detail-modal">
         <div class="dm-header">
@@ -65,27 +61,27 @@
         </div>
         <div class="dm-body">
           <div class="dm-macros">
-            <span>🔥 {{ detailRecipe.calories || '—' }} kcal</span>
-            <span>💪 {{ detailRecipe.protein || '—' }}g 蛋白</span>
-            <span>🫒 {{ detailRecipe.fat || '—' }}g 脂肪</span>
-            <span>🌾 {{ detailRecipe.carbs || '—' }}g 碳水</span>
+            <span>{{ detailRecipe.calories || '—' }} kcal</span>
+            <span>{{ detailRecipe.protein || '—' }}g 蛋白</span>
+            <span>{{ detailRecipe.fat || '—' }}g 脂肪</span>
+            <span>{{ detailRecipe.carbs || '—' }}g 碳水</span>
           </div>
           <div v-if="detailLoading" class="dm-loading">加载中...</div>
           <div v-else>
             <div v-if="detailData && detailData.ingredients" class="dm-section">
-              <h4>🛒 食材清单</h4>
+              <h4>食材清单</h4>
               <div class="ing-tags" v-html="formatIngredients(detailData.ingredients)"></div>
             </div>
             <div v-else-if="detailRecipe.ingredients" class="dm-section">
-              <h4>🛒 食材清单</h4>
+              <h4>食材清单</h4>
               <div class="ing-tags" v-html="formatIngredients(detailRecipe.ingredients)"></div>
             </div>
             <div v-if="detailData && detailData.steps" class="dm-section">
-              <h4>🍳 烹饪步骤</h4>
+              <h4>烹饪步骤</h4>
               <div class="steps-content" v-html="formatSteps(detailData.steps)"></div>
             </div>
             <div v-else-if="detailRecipe.steps" class="dm-section">
-              <h4>🍳 烹饪步骤</h4>
+              <h4>烹饪步骤</h4>
               <div class="steps-content" v-html="formatSteps(detailRecipe.steps)"></div>
             </div>
             <div v-if="!detailLoading && !detailData && !detailRecipe.ingredients && !detailRecipe.steps" class="dm-empty">
@@ -96,11 +92,10 @@
       </div>
     </div>
 
-    <!-- 购物清单弹窗 -->
     <div v-if="showShoppingList" class="modal-overlay" @click.self="showShoppingList = false">
       <div class="shopping-modal">
         <div class="sm-header">
-          <h3>🛒 购物清单</h3>
+          <h3>购物清单</h3>
           <button class="close-btn" @click="showShoppingList = false">×</button>
         </div>
         <div class="sm-body">
@@ -109,14 +104,14 @@
           </div>
           <div v-else>
             <div v-for="(group, gIdx) in shoppingGroups" :key="gIdx" class="sl-group">
-              <div class="sl-recipe-name">📌 {{ group.recipeName }}</div>
+              <div class="sl-recipe-name">{{ group.recipeName }}</div>
               <div v-if="group.ingredients.length === 0" class="sl-no-ing">（无食材信息）</div>
               <div v-for="(ing, iIdx) in group.ingredients" :key="iIdx" class="sl-item">
                 <span>{{ ing }}</span>
               </div>
             </div>
           </div>
-          <button class="copy-btn" @click="copyShoppingList">📋 复制到剪贴板</button>
+          <button class="copy-btn" @click="copyShoppingList">复制到剪贴板</button>
         </div>
       </div>
     </div>
@@ -279,7 +274,7 @@ const copyShoppingList = () => {
     const ings = g.ingredients.length > 0 ? g.ingredients.join('、') : '（无食材信息）'
     return `【${g.recipeName}】${ings}`
   })
-  navigator.clipboard.writeText(lines.join('\n')).then(() => alert('✅ 已复制到剪贴板'))
+  navigator.clipboard.writeText(lines.join('\n')).then(() => alert('已复制到剪贴板'))
 }
 
 // 格式化食材（弹窗显示）

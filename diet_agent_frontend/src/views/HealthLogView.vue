@@ -1,7 +1,7 @@
 <template>
   <div class="health-log-view">
     <div class="page-header">
-      <h2>📋 健康日志</h2>
+      <h2>健康日志</h2>
       <div class="date-nav">
         <button @click="prevMonth">◀</button>
         <span>{{ currentMonth }}</span>
@@ -13,7 +13,7 @@
     <div v-if="loading" class="loading-state">正在翻阅图谱记忆...</div>
 
     <div v-else-if="allLogs.length === 0" class="empty-state">
-      <p>📝 还没有饮食记录哦</p>
+      <p>还没有饮食记录哦</p>
       <p>去「饮食记录」或「AI助手」页面开始记录吧！</p>
     </div>
 
@@ -39,7 +39,7 @@
           <!-- 事件记录 -->
           <div v-if="group.events.length > 0" class="section-block events-block">
             <div v-for="evt in group.events" :key="evt" class="event-item">
-              <span class="ei-icon">📌</span>
+              <span class="ei-icon"></span>
               <span class="ei-text">{{ evt }}</span>
             </div>
           </div>
@@ -49,7 +49,7 @@
 
     <!-- 历史对话记录 -->
     <div class="chat-history-section">
-      <h3>💬 历史对话记录</h3>
+      <h3>历史对话记录</h3>
       <div v-if="chatSessions.length === 0" class="ch-empty">暂无对话记录</div>
       <div v-for="session in chatSessions" :key="session.session_id" class="ch-card">
         <div class="ch-header" @click="toggleSession(session)">
@@ -143,8 +143,8 @@ const formatDate = (dateStr) => {
 }
 
 const mealIcon = (type) => {
-  const icons = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍪' }
-  return icons[type] || '🍽️'
+  const icons = { breakfast: '', lunch: '', dinner: '', snack: '' }
+  return icons[type] || ''
 }
 
 // 历史对话

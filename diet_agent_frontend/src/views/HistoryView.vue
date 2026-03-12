@@ -1,6 +1,6 @@
 <template>
   <div class="history-container">
-    <h2>📖 我的饮食档案</h2>
+    <h2>我的饮食档案</h2>
 
     <div v-if="loading" class="loading">正在翻阅图谱记忆...</div>
 
@@ -39,7 +39,6 @@ onMounted(async () => {
   }
 })
 
-// 简单处理一下后端传来的字符串格式
 const parseDate = (str) => {
   try {
     return str?.split('安排了:')[0]?.trim() || '未知日期'
@@ -53,7 +52,6 @@ const parseRecipes = (str) => {
 </script>
 
 <style scoped>
-/* 这里你可以发挥你的 CSS 天赋，画一个漂亮的左侧竖线时间轴样式 */
 .timeline { border-left: 2px solid #42b983; padding-left: 20px; margin-top: 20px; }
 .timeline-item { position: relative; margin-bottom: 20px; }
 .time-dot { position: absolute; left: -26px; top: 0; width: 10px; height: 10px; border-radius: 50%; background: #42b983; border: 2px solid white; box-shadow: 0 0 0 2px #42b983; }

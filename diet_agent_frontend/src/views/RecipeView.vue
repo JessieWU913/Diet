@@ -1,9 +1,9 @@
 <template>
   <div class="recipe-view">
     <div class="page-header">
-      <h2>🍽️ 食谱推荐</h2>
+      <h2>食谱推荐</h2>
       <button class="refresh-btn" @click="loadRecommendations" :disabled="loading">
-        {{ loading ? '加载中...' : '🔄 换一批' }}
+        {{ loading ? '加载中...' : '换一批' }}
       </button>
     </div>
 
@@ -41,42 +41,40 @@
         <div v-for="recipe in getFilteredRecipes(section.key)" :key="recipe.name" class="recipe-card">
           <div class="rc-name">{{ recipe.name }}</div>
           <div class="rc-macros">
-            <span class="macro cal">🔥 {{ recipe.calories || '—' }} kcal</span>
-            <span class="macro protein">💪 {{ recipe.protein || '—' }}g 蛋白</span>
-            <span class="macro fat">🫒 {{ recipe.fat || '—' }}g 脂肪</span>
-            <span class="macro carbs">🌾 {{ recipe.carbs || '—' }}g 碳水</span>
+            <span class="macro cal">{{ recipe.calories || '—' }} kcal</span>
+            <span class="macro protein">{{ recipe.protein || '—' }}g 蛋白</span>
+            <span class="macro fat">{{ recipe.fat || '—' }}g 脂肪</span>
+            <span class="macro carbs">{{ recipe.carbs || '—' }}g 碳水</span>
           </div>
           <div class="rc-actions">
-            <button class="rc-add" @click="addToDietLog(recipe, section.key)">📝 记录饮食</button>
-            <button class="rc-detail" @click="viewDetail(recipe)">📖 查看做法</button>
-            <button class="rc-fav" @click="addToCollection(recipe)">⭐ 收藏</button>
+            <button class="rc-add" @click="addToDietLog(recipe, section.key)">记录饮食</button>
+            <button class="rc-detail" @click="viewDetail(recipe)">查看做法</button>
+            <button class="rc-fav" @click="addToCollection(recipe)">收藏</button>
           </div>
         </div>
 
-        <!-- 每餐小计 -->
         <div class="mc-subtotal" v-if="getFilteredRecipes(section.key).length > 0">
           小计：{{ getMealTotalCalories(section.key) }} kcal
         </div>
       </div>
     </div>
 
-    <!-- 导出的菜谱（来自AI对话） -->
     <div v-if="Object.keys(exportedMeals).length > 0" class="exported-section">
-      <h3>📥 AI 导出的菜谱</h3>
+      <h3>AI 导出的菜谱</h3>
       <div v-for="(recipes, date) in exportedMeals" :key="date" class="exported-day">
         <h4 class="ed-date">{{ date }}</h4>
         <div class="exported-grid">
           <div v-for="r in recipes" :key="r.id" class="exported-card">
             <div class="ec-name">{{ r.name }}</div>
             <div class="ec-macros">
-              <span>🔥 {{ r.calories || '—' }} kcal</span>
-              <span v-if="r.protein">💪 {{ r.protein }}g 蛋白</span>
-              <span v-if="r.fat">🫒 {{ r.fat }}g 脂肪</span>
-              <span v-if="r.carbs">🌾 {{ r.carbs }}g 碳水</span>
+              <span>{{ r.calories || '—' }} kcal</span>
+              <span v-if="r.protein">{{ r.protein }}g 蛋白</span>
+              <span v-if="r.fat">{{ r.fat }}g 脂肪</span>
+              <span v-if="r.carbs">{{ r.carbs }}g 碳水</span>
             </div>
             <div class="ec-actions">
-              <button class="ec-detail" @click="viewDetail(r)">📖 查看做法</button>
-              <button class="ec-fav" @click="addToCollection(r)">⭐ 收藏</button>
+              <button class="ec-detail" @click="viewDetail(r)">查看做法</button>
+              <button class="ec-fav" @click="addToCollection(r)">收藏</button>
             </div>
           </div>
         </div>
@@ -92,18 +90,18 @@
         </div>
         <div class="dm-body">
           <div class="dm-macros">
-            <span>🔥 {{ detailRecipe.calories }} kcal</span>
-            <span>💪 {{ detailRecipe.protein }}g 蛋白</span>
-            <span>🫒 {{ detailRecipe.fat }}g 脂肪</span>
-            <span>🌾 {{ detailRecipe.carbs }}g 碳水</span>
+            <span>{{ detailRecipe.calories }} kcal</span>
+            <span>{{ detailRecipe.protein }}g 蛋白</span>
+            <span>{{ detailRecipe.fat }}g 脂肪</span>
+            <span>{{ detailRecipe.carbs }}g 碳水</span>
           </div>
           <div v-if="detailData" class="dm-content">
             <div v-if="detailData.ingredients" class="dm-section">
-              <h4>🛒 食材清单</h4>
+              <h4>食材清单</h4>
               <div v-html="formatIngredients(detailData.ingredients)"></div>
             </div>
             <div v-if="detailData.steps" class="dm-section">
-              <h4>🍳 烹饪步骤</h4>
+              <h4>烹饪步骤</h4>
               <div v-html="formatSteps(detailData.steps)"></div>
             </div>
           </div>
@@ -128,9 +126,9 @@ const detailData = ref(null)
 const filters = reactive({ maxCalories: 700, minProtein: 0, maxFat: 50 })
 
 const mealSections = [
-  { key: 'breakfast', label: '早餐', icon: '🌅' },
-  { key: 'lunch', label: '午餐', icon: '☀️' },
-  { key: 'dinner', label: '晚餐', icon: '🌙' },
+  { key: 'breakfast', label: '早餐', icon: '' },
+  { key: 'lunch', label: '午餐', icon: '' },
+  { key: 'dinner', label: '晚餐', icon: '' },
 ]
 
 // 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
@@ -220,7 +218,7 @@ const addToDietLog = async (recipe, mealType) => {
       carbs: recipe.carbs || 0,
       amount: 1
     })
-    alert(`✅ 已将「${recipe.name}」记入今日${mealType === 'breakfast' ? '早餐' : mealType === 'lunch' ? '午餐' : '晚餐'}`)
+    alert(`已将「${recipe.name}」记入今日${mealType === 'breakfast' ? '早餐' : mealType === 'lunch' ? '午餐' : '晚餐'}`)
   } catch (e) { alert('记录失败') }
 }
 
@@ -268,7 +266,7 @@ const addToCollection = async (recipe) => {
       ingredients: recipe.ingredients || '',
       steps: recipe.steps || ''
     })
-    alert(`✅ 已收藏「${recipe.name}」`)
+    alert(`已收藏「${recipe.name}」`)
   } catch (e) { alert('收藏失败，可能已经收藏过了') }
 }
 
