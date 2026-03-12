@@ -40,19 +40,17 @@ llm = ChatOpenAI(
     frequency_penalty=1.1
 )
 
-# 绑定四大工具（使用 functions 格式兼容 Gitee AI 等国产 API）
 tools = [vector_search_recipe, get_food_nutrition, check_food_conflicts, search_recipe_by_ingredients]
 openai_fns = [convert_to_openai_function(t) for t in tools]
 llm_with_tools = llm.bind(functions=openai_fns)
 
 
-# 核心节点（GSSC 上下文管线重构）
+# 核心节点
 def agent_node(state: AgentState):
     mode = state.get('user_mode', 'standard')
     profile = state.get('user_profile', {})
     user_id = state.get('user_id')
 
-    # -------- GSSC 上下文管线 --------
     builder = ContextBuilder(
         user_id=user_id,
         user_mode=mode,
@@ -63,7 +61,6 @@ def agent_node(state: AgentState):
     system_prompt, compressed_messages = builder.build(state['messages'])
     messages = list(compressed_messages)
 
-    # 将 System Prompt 置于消息流首位
     if messages and isinstance(messages[0], SystemMessage):
         messages[0] = SystemMessage(content=system_prompt)
     else:
@@ -71,7 +68,6 @@ def agent_node(state: AgentState):
 
     response = llm_with_tools.invoke(messages)
 
-    # 兜底：拦截 Gitee 漏出标记
     if not response.tool_calls:
         content = response.content
         target_tools = ["get_food_nutrition", "check_food_conflicts", "search_recipe_by_ingredients", "vector_search_recipe"]
@@ -94,7 +90,7 @@ def agent_node(state: AgentState):
     return {"messages": [response]}
 
 
-# 反思节点 (保持不变)
+# 反思节点
 def reflector_node(state: AgentState):
     mode = state.get('user_mode', 'standard')
     messages = state['messages']
@@ -123,7 +119,7 @@ def reflector_node(state: AgentState):
     return {"reflection_count": count}
 
 
-# 路由判断与构建 (保持不变)
+# 路由判断与构建
 def router(state: AgentState) -> Literal["tools", "reflector"]:
     last_msg = state['messages'][-1]
     if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
@@ -135,23 +131,19 @@ def reflector_router(state: AgentState) -> Literal["agent", "__end__"]:
         return "agent"
     return "__end__"
 
-# 自定义工具执行节点，兼容字典和对象格式的 tool_calls
 def custom_tools_execution_node(state: AgentState):
     messages = state['messages']
     last_msg = messages[-1]
     results = []
 
-    # 构建工具映射表
     tool_map = {t.name: t for t in tools}
 
-    # 检查是否有 tool_calls
     tool_calls = getattr(last_msg, 'tool_calls', [])
 
     if tool_calls:
         print(f"执行工具调用: {len(tool_calls)} 个")
         for call in tool_calls:
             try:
-                # 兼容字典和对象访问
                 if isinstance(call, dict):
                     tool_name = call.get('name')
                     tool_args = call.get('args', {})
@@ -165,10 +157,8 @@ def custom_tools_execution_node(state: AgentState):
 
                 if tool_name in tool_map:
                     tool_instance = tool_map[tool_name]
-                    # 执行工具
                     tool_output = tool_instance.invoke(tool_args)
 
-                    # 构造 ToolMessage
                     results.append(ToolMessage(
                         tool_call_id=call_id,
                         name=tool_name,

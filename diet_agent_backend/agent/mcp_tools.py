@@ -15,7 +15,7 @@ def web_search_tavily(query: str):
     """
     print(f"正在调用联网搜索 (DuckDuckGo): {query}")
     try:
-        # 这里直接调用 DuckDuckGo
+        # 直接调用DuckDuckGo
         return ddg_search.run(query)
     except Exception as e:
         return f"网络搜索超时或失败: {e}"
@@ -29,7 +29,7 @@ def get_food_nutrition(food_names: list[str]):
     """
     print(f"正在查询营养明细: {food_names}")
 
-    # 逻辑：同时在 Recipe(菜谱) 和 Ingredient(食材) 标签中寻找
+    # 同时在Recipe和Ingredient标签中寻找
     cypher = """
     MATCH (n)
     WHERE (n:Recipe OR n:Ingredient)
@@ -60,19 +60,16 @@ def search_recipe_by_ingredients(ingredients: list[str], strict_mode: bool = Fal
     print(f"匹配食材: {ingredients} | 减脂模式: {strict_mode}")
 
     if strict_mode:
-        # 强制过滤高热量、高脂肪（>25g）的菜，排除拔丝/油炸
         strict_filter = """
         AND n.calories < 500 
         AND n.fat < 25 
         AND NOT n.name CONTAINS '拔丝' 
         AND NOT n.name CONTAINS '炸'
         """
-        # 减脂打分公式：蛋白质越高越好，脂肪和热量越低越好
         # 给蛋白质极高的权重，脂肪扣分
         order_logic = "ORDER BY (n.protein * 5) - (n.fat * 3) - (n.calories * 0.2) DESC"
     else:
         strict_filter = "AND NOT n.name CONTAINS '拔丝'"
-        # 日常模式：根据食材匹配命中率排序，热量低的优先
         order_logic = """
                       WITH n, \
                            size([ing IN $ingredients WHERE n.name CONTAINS ing]) * 10 +
@@ -149,7 +146,6 @@ def vector_search_recipe(query: str, strict_mode: bool = False, exclude_ingredie
     try:
         query_vector = embedding_model.encode(query).tolist()
 
-        # 1. 减脂过滤
         extra_filter = """
         AND node.calories < 500 
         AND node.fat < 25
@@ -164,13 +160,11 @@ def vector_search_recipe(query: str, strict_mode: bool = False, exclude_ingredie
             ) 
             """
 
-        # 保证参数类型安全
         params = {
             "embedding": query_vector,
             "exclude_ingredients": exclude_ingredients if exclude_ingredients else []
         }
 
-        # 3. 执行查询（稍微降低向量阈值到 0.25，因为我们有了强大的前后置过滤保护）
         cypher = f"""
         CALL db.index.vector.queryNodes('recipe_embedding_index', 15, $embedding)
         YIELD node, score

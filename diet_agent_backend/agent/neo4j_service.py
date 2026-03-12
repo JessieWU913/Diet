@@ -28,5 +28,4 @@ class Neo4jService:
             result = session.run(cypher_query, params)
             return [record.data() for record in result]
 
-# 实例化一个全局对象供其他模块调用
 graph_db = Neo4jService()

@@ -236,9 +236,6 @@ class MealEventView(APIView):
         history = EpisodicMemory.get_recent_meals(user_id, days_limit=14)
         return Response({"history": history})
 
-
-# ==================== 新增接口 ====================
-
 class FoodSearchView(APIView):
     """搜索食物/菜谱的营养信息"""
     def get(self, request):
@@ -414,19 +411,16 @@ class RecommendMealsView(APIView):
     def get(self, request):
         user_id = request.query_params.get("user_id")
 
-        # 获取用户画像
         profile = SemanticMemory.get_user_profile(user_id) if user_id else {}
         dislikes = profile.get("dislikes", [])
         allergies = profile.get("allergies", [])
         avoid_list = dislikes + allergies
 
-        # 构建排除条件
         avoid_filter = ""
         if avoid_list:
             conditions = " AND ".join([f"NOT n.name CONTAINS '{item}' AND NOT n.ingredients_raw CONTAINS '{item}'" for item in avoid_list])
             avoid_filter = f"AND {conditions}"
 
-        # 早餐推荐：低热量、清淡
         breakfast_cypher = f"""
         MATCH (n:Recipe)
         WHERE n.calories < 400 AND n.calories > 100
@@ -437,7 +431,7 @@ class RecommendMealsView(APIView):
                n.protein AS protein, n.fat AS fat, n.carbs AS carbs
         LIMIT 3
         """
-        # 午餐推荐：营养均衡，热量适中
+
         lunch_cypher = f"""
         MATCH (n:Recipe)
         WHERE n.calories >= 300 AND n.calories <= 700
@@ -448,7 +442,7 @@ class RecommendMealsView(APIView):
                n.protein AS protein, n.fat AS fat, n.carbs AS carbs
         LIMIT 4
         """
-        # 晚餐推荐：控制热量
+
         dinner_cypher = f"""
         MATCH (n:Recipe)
         WHERE n.calories >= 200 AND n.calories <= 500
@@ -514,7 +508,6 @@ class SimilarIngredientView(APIView):
         if not name:
             return Response({"error": "缺少食材名"}, status=400)
 
-        # 先查图谱中同类别食材
         cypher = """
         MATCH (n:Ingredient {name: $name})
         OPTIONAL MATCH (n)-[:CATEGORY]->(cat)<-[:CATEGORY]-(sim:Ingredient)
@@ -529,7 +522,6 @@ class SimilarIngredientView(APIView):
         try:
             results = graph_db.query(cypher, {"name": name})
             if not results:
-                # 用名称模糊匹配兜底
                 fallback = """
                 MATCH (n:Ingredient)
                 WHERE n.name <> $name AND n.name CONTAINS $keyword
@@ -700,7 +692,6 @@ class ChatHistoryView(APIView):
                 "title": title, "now": now
             })
 
-            # 删除旧消息并写入新消息
             del_cypher = """
             MATCH (s:ChatSession {id: $session_id})-[:HAS_MSG]->(m:ChatMessage)
             DETACH DELETE m

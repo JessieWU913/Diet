@@ -9,7 +9,6 @@ def search_recipe_by_ingredients(ingredients: list[str]):
     根据用户拥有的食材查询推荐食谱。
     输入示例: ['猪肉', '青椒']
     """
-    # 这里的逻辑是：查询包含 ANY (任意一个) 食材的食谱
     # 并按匹配度排序
     query = """
     MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
