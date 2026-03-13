@@ -42,16 +42,8 @@
               class="form-control"
             />
             <button type="button" class="eye-btn" @click="showPassword = !showPassword">
-              <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
-                <path d="M3 3l18 18" />
-                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-                <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5.2 0 9.3 3.1 11 8-0.5 1.5-1.3 2.9-2.4 4" />
-                <path d="M6.2 6.2A12.3 12.3 0 0 0 1 12c1.7 4.9 5.8 8 11 8 1.7 0 3.2-.3 4.6-.9" />
-              </svg>
-              <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
-                <path d="M1 12c1.7-4.9 5.8-8 11-8s9.3 3.1 11 8c-1.7 4.9-5.8 8-11 8s-9.3-3.1-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <EyeOff v-if="showPassword" aria-hidden="true" class="eye-icon" :size="18" :stroke-width="1.9" />
+              <Eye v-else aria-hidden="true" class="eye-icon" :size="18" :stroke-width="1.9" />
             </button>
           </div>
         </div>
@@ -67,16 +59,8 @@
               class="form-control"
             />
             <button type="button" class="eye-btn" @click="showConfirmPassword = !showConfirmPassword">
-              <svg v-if="showConfirmPassword" viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
-                <path d="M3 3l18 18" />
-                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-                <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5.2 0 9.3 3.1 11 8-0.5 1.5-1.3 2.9-2.4 4" />
-                <path d="M6.2 6.2A12.3 12.3 0 0 0 1 12c1.7 4.9 5.8 8 11 8 1.7 0 3.2-.3 4.6-.9" />
-              </svg>
-              <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
-                <path d="M1 12c1.7-4.9 5.8-8 11-8s9.3 3.1 11 8c-1.7 4.9-5.8 8-11 8s-9.3-3.1-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <EyeOff v-if="showConfirmPassword" aria-hidden="true" class="eye-icon" :size="18" :stroke-width="1.9" />
+              <Eye v-else aria-hidden="true" class="eye-icon" :size="18" :stroke-width="1.9" />
             </button>
           </div>
         </div>
@@ -100,6 +84,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { Eye, EyeOff } from 'lucide-vue-next'
 
 const router = useRouter()
 

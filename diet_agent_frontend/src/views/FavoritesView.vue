@@ -31,9 +31,9 @@
           <div v-for="(ing, iIdx) in item.parsedIngredients" :key="iIdx" class="ing-row">
             <span class="ing-name">{{ ing.name }}</span>
             <span v-if="ing.amount" class="ing-amount">{{ ing.amount }}</span>
-            <button class="ing-replace-btn" @click="openRelationPanel(item, iIdx, 'overlaps')">替换（重叠）</button>
-            <button class="ing-conflict-btn" @click="openRelationPanel(item, iIdx, 'conflicts')">同食禁忌（互斥）</button>
-            <button class="ing-complement-btn" @click="openRelationPanel(item, iIdx, 'complements')">互补</button>
+            <button class="ing-replace-btn" @click="openRelationPanel(item, iIdx, 'overlaps')">替换</button>
+            <button class="ing-conflict-btn" @click="openRelationPanel(item, iIdx, 'conflicts')">相克</button>
+            <button class="ing-complement-btn" @click="openRelationPanel(item, iIdx, 'complements')">相宜</button>
 
             <div v-if="ing.panelMode === 'overlaps'" class="similar-panel">
               <div v-if="ing.relationLoading" class="sp-loading">搜索中...</div>

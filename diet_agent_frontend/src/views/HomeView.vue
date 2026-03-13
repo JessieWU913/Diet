@@ -162,7 +162,7 @@ onMounted(() => {
   width: 248px;
   height: 248px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 0%, #e3fff1 0%, #f9fcfb 52%, #fff 100%);
+  background: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;

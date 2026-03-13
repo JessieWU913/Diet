@@ -86,7 +86,7 @@
         </ul>
 
         <div class="exercise-entry">
-          <h4>运动消耗录入（MET 估算）</h4>
+          <h4>运动消耗录入</h4>
           <div class="ee-row">
             <select v-model="exerciseForm.exerciseType">
               <option v-for="opt in metOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -97,10 +97,6 @@
             </div>
           </div>
           <div class="ee-row">
-            <div class="ee-input-wrap">
-              <input type="number" min="0" step="0.1" v-model.number="exerciseForm.met" placeholder="MET" />
-              <span class="ee-unit">MET</span>
-            </div>
             <div class="ee-input-wrap">
               <input type="number" min="0" step="1" v-model.number="exerciseForm.manualCalories" placeholder="手动 kcal（可选）" />
               <span class="ee-unit">kcal</span>
@@ -162,8 +158,12 @@ const metOptions = [
 const exerciseForm = ref({
   exerciseType: 'walk',
   durationMinutes: 30,
-  met: 4.3,
   manualCalories: null,
+})
+
+const selectedMet = computed(() => {
+  const opt = metOptions.find((x) => x.value === exerciseForm.value.exerciseType)
+  return opt ? opt.met : 4.3
 })
 
 const toInt = (v) => Math.max(0, Math.round(Number(v || 0)))
@@ -241,7 +241,7 @@ const estimatedExerciseCalories = computed(() => {
     return toInt(exerciseForm.value.manualCalories)
   }
   const weight = Number(profile.value.weight || 0) || 60
-  const met = Number(exerciseForm.value.met || 0)
+  const met = Number(selectedMet.value || 0)
   const min = Number(exerciseForm.value.durationMinutes || 0)
   if (met <= 0 || min <= 0) return 0
   return toInt(met * weight * (min / 60))
@@ -349,7 +349,7 @@ const addExerciseLog = async () => {
       date: selectedDate.value,
       exercise_type: selectedExerciseLabel.value,
       duration_minutes: Number(exerciseForm.value.durationMinutes || 0),
-      met: Number(exerciseForm.value.met || 0),
+      met: Number(selectedMet.value || 0),
       calories: Number(exerciseForm.value.manualCalories || 0),
     })
     exerciseForm.value.manualCalories = null
@@ -373,11 +373,6 @@ const removeExerciseLog = async (logId) => {
 watch(selectedDate, () => {
   loadDateTotals()
   loadExerciseTotals()
-})
-
-watch(() => exerciseForm.value.exerciseType, (type) => {
-  const opt = metOptions.find((x) => x.value === type)
-  if (opt) exerciseForm.value.met = opt.met
 })
 
 onMounted(async () => {
@@ -521,6 +516,9 @@ onMounted(async () => {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 8px;
+}
+.exercise-entry .ee-row:nth-of-type(2) {
+  grid-template-columns: 1fr;
 }
 .ee-row select,
 .ee-row input {

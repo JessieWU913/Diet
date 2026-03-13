@@ -61,29 +61,19 @@
 
             <div v-if="msg.role === 'assistant' && idx > 0" class="msg-actions">
               <button class="act-btn thumb-btn" :class="{ active: msg.feedback === 'up' }" @click="rate(msg, 'up')" :disabled="msg.feedbackSubmitted" title="点赞反馈" aria-label="点赞反馈">
-                <svg viewBox="0 0 24 24" class="thumb-icon" aria-hidden="true">
-                  <path d="M2 21h4V9H2v12zm20-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L13 1 6.59 7.41C6.22 7.78 6 8.3 6 8.83V19c0 1.1.9 2 2 2h9c.82 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V10z"/>
-                </svg>
+                <ThumbsUp class="icon-lucide" :size="16" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn thumb-btn" :class="{ active: msg.feedback === 'down' }" @click="rate(msg, 'down')" :disabled="msg.feedbackSubmitted" title="点踩反馈" aria-label="点踩反馈">
-                <svg viewBox="0 0 24 24" class="thumb-icon is-down" aria-hidden="true">
-                  <path d="M2 3h4v12H2V3zm20 11c0 1.1-.9 2-2 2h-6.31l.95 4.57.03.32c0 .41-.17.79-.44 1.06L13 23l-6.41-6.41A1.996 1.996 0 016 15.17V5c0-1.1.9-2 2-2h9c.82 0 1.54.5 1.84 1.22l3.02 7.05c.09.23.14.47.14.73V14z"/>
-                </svg>
+                <ThumbsDown class="icon-lucide" :size="16" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn icon-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复" aria-label="重新生成">
-                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
-                  <path d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6a6 6 0 01-10.24 4.24l-1.42 1.42A8 8 0 1020 13c0-4.42-3.58-8-8-8z"/>
-                </svg>
+                <RotateCcw class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn icon-btn" @click="copyMessage(msg)" title="复制这条回复" aria-label="复制">
-                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
-                  <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                </svg>
+                <Copy class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn icon-btn" @click="openExportModal(msg)" :disabled="(msg.detectedRecipeNames || []).length === 0" title="导出到食谱推荐页" aria-label="导出">
-                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
-                  <path d="M5 20h14v-2H5v2zM12 2l-5.5 5.5 1.42 1.42L11 5.84V16h2V5.84l3.08 3.08 1.42-1.42L12 2z"/>
-                </svg>
+                <Upload class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
                 <span v-if="(msg.detectedRecipeNames || []).length > 0" class="icon-badge">{{ (msg.detectedRecipeNames || []).length }}</span>
               </button>
             </div>
@@ -185,6 +175,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import { ThumbsUp, ThumbsDown, RotateCcw, Copy, Upload } from 'lucide-vue-next'
 import API from '../api.js'
 
 const userId = ref(localStorage.getItem('user_id') || '')
@@ -844,7 +835,6 @@ onMounted(() => {
 .loading-dots span:nth-child(2) { animation-delay: -.16s; }
 @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-/* 操作栏（Gemini风格） */
 .msg-actions {
   display: flex;
   flex-wrap: wrap;
@@ -859,7 +849,7 @@ onMounted(() => {
 .is-ai .msg-body:hover .msg-actions { opacity: 1; }
 
 .act-btn {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: #1f2329;
   border-radius: 8px;
@@ -869,27 +859,24 @@ onMounted(() => {
   transition: .18s;
 }
 
-.act-btn:hover:not(:disabled) { background: #f2f3f5; }
-.act-btn.active { background: #1f2329; color: #fff; }
+.act-btn:hover:not(:disabled) { color: #000; }
+.act-btn.active { color: #000; }
 .act-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .thumb-btn {
   width: 30px;
   height: 30px;
+  border: 1.2px solid #1f2329;
+  border-radius: 999px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.thumb-icon {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-}
-
-.thumb-icon.is-down {
-  transform: rotate(0deg);
+.thumb-btn.active {
+  border-color: #000;
+  background: transparent;
 }
 
 .icon-btn {
@@ -902,18 +889,8 @@ onMounted(() => {
   justify-content: center;
 }
 
-.icon-plain {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-}
-
-.icon-btn[aria-label="重新生成"] .icon-plain {
-  transition: transform .18s ease;
-}
-
-.icon-btn[aria-label="重新生成"]:hover .icon-plain {
-  transform: rotate(-24deg);
+.icon-lucide {
+  display: block;
 }
 
 .icon-badge {

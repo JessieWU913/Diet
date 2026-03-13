@@ -34,7 +34,7 @@
           <span class="nav-icon"></span><span>AI 助手</span>
         </router-link>
         <router-link to="/ingredient-search" class="nav-item">
-          <span class="nav-icon"></span><span>食材查询</span>
+          <span class="nav-icon"></span><span>饮食查询</span>
         </router-link>
         <router-link to="/health-log" class="nav-item">
           <span class="nav-icon"></span><span>健康日志</span>
