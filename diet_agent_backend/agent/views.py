@@ -22,6 +22,7 @@ from django.contrib.auth.hashers import make_password, check_password
 
 _recipe_enrich_llm = None
 _admin_sessions = {}
+_user_id_constraint_ready = False
 
 ADMIN_DEFAULT_ID = os.getenv("ADMIN_DEFAULT_ID", "admin")
 ADMIN_DEFAULT_PASSWORD = os.getenv("ADMIN_DEFAULT_PASSWORD", "123")
@@ -242,9 +243,25 @@ def _read_admin_import_payload(request):
         "file_name": file_name,
     }
 
+
+def _ensure_user_id_constraint():
+    global _user_id_constraint_ready
+    if _user_id_constraint_ready:
+        return
+    try:
+        graph_db.query(
+            "CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE"
+        )
+        _user_id_constraint_ready = True
+    except Exception as e:
+        # Do not block auth flow if constraint creation fails in restricted environments.
+        print(f"WARNING: ensure user id constraint failed: {e}")
+
 # 用户注册与登录接口
 class UserAuthView(APIView):
     def post(self, request):
+        _ensure_user_id_constraint()
+
         user_id = str(request.data.get("user_id", "")).strip()
         password = str(request.data.get("password", "")).strip()
         action = request.data.get("action")
@@ -284,7 +301,7 @@ class UserAuthView(APIView):
                 return Response({"error": f"数据库写入失败: {e}"}, status=500)
 
         elif action == 'login':
-            login_cypher = "MATCH (u:User {id: $user_id}) RETURN u.password AS db_password"
+            login_cypher = "MATCH (u:User {id: $user_id}) RETURN u.password AS db_password, coalesce(u.name, '') AS user_name"
             result = graph_db.query(login_cypher, {"user_id": user_id})
 
             if not result:
@@ -303,7 +320,11 @@ class UserAuthView(APIView):
 
             if check_password(password, db_password_str):
                 print("密码校验通过，允许登录！")
-                return Response({"status": "success", "message": "登录成功"})
+                return Response({
+                    "status": "success",
+                    "message": "登录成功",
+                    "user_name": result[0].get("user_name", "")
+                })
             else:
                 print(f"密码校验失败！前端传来的明文是: '{password}'")
                 return Response({"error": "密码错误，请重试"}, status=401)

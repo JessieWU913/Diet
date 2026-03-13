@@ -98,10 +98,6 @@
                 <label>体重 (kg)</label>
                 <input type="number" v-model.number="profileForm.weight" placeholder="65" />
               </div>
-              <div class="pm-field">
-                <label>新密码 (可选)</label>
-                <input type="password" v-model="profileForm.newPassword" placeholder="留空不修改" />
-              </div>
             </div>
 
             <div class="pm-field full">
@@ -165,7 +161,7 @@ const userInitial = computed(() => {
 
 const profileForm = ref({
   name: '', gender: 'female', birthDate: '', height: '', weight: '',
-  allergies: [], dislikes: [], newPassword: ''
+  allergies: [], dislikes: []
 })
 
 const loadProfile = async () => {

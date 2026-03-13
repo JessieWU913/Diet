@@ -41,7 +41,16 @@
               class="form-control"
             />
             <button type="button" class="eye-btn" @click="showPassword = !showPassword">
-              {{ showPassword ? '🙈' : '👁' }}
+              <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
+                <path d="M3 3l18 18" />
+                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5.2 0 9.3 3.1 11 8-0.5 1.5-1.3 2.9-2.4 4" />
+                <path d="M6.2 6.2A12.3 12.3 0 0 0 1 12c1.7 4.9 5.8 8 11 8 1.7 0 3.2-.3 4.6-.9" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
+                <path d="M1 12c1.7-4.9 5.8-8 11-8s9.3 3.1 11 8c-1.7 4.9-5.8 8-11 8s-9.3-3.1-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
             </button>
           </div>
         </div>
@@ -57,7 +66,16 @@
               class="form-control"
             />
             <button type="button" class="eye-btn" @click="showConfirmPassword = !showConfirmPassword">
-              {{ showConfirmPassword ? '🙈' : '👁' }}
+              <svg v-if="showConfirmPassword" viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
+                <path d="M3 3l18 18" />
+                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5.2 0 9.3 3.1 11 8-0.5 1.5-1.3 2.9-2.4 4" />
+                <path d="M6.2 6.2A12.3 12.3 0 0 0 1 12c1.7 4.9 5.8 8 11 8 1.7 0 3.2-.3 4.6-.9" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="eye-icon">
+                <path d="M1 12c1.7-4.9 5.8-8 11-8s9.3 3.1 11 8c-1.7 4.9-5.8 8-11 8s-9.3-3.1-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
             </button>
           </div>
         </div>
@@ -160,6 +178,7 @@ const handleSubmit = async () => {
         localStorage.removeItem('is_admin')
         localStorage.removeItem('admin_token')
         localStorage.setItem('user_id', cleanUserId)
+        localStorage.setItem('user_name', response.data.user_name || cleanUserId)
         router.push('/chat')
       } else {
         alert('注册成功，请登录！')
@@ -220,8 +239,20 @@ const handleSubmit = async () => {
 .password-wrap .form-control { padding-right: 42px; }
 .eye-btn {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  border: none; background: transparent; cursor: pointer; font-size: 16px; line-height: 1;
+  border: none; background: transparent; cursor: pointer; line-height: 1;
   color: #6c7a89; padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.eye-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .submit-btn { width: 100%; background: #7761e5; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
 .submit-btn:hover:not(:disabled) { background: #6350d0; }
