@@ -16,6 +16,7 @@ class SemanticMemory:
         MATCH (u:User {id: $user_id})
         RETURN u.name AS name, u.weight AS weight, u.height AS height, u.gender AS gender,
                u.allergies AS allergies, u.dislikes AS dislikes,
+             coalesce(u.positive_feedback, []) AS positive_feedback,
                coalesce(u.negative_feedback, []) AS negative_feedback,
                coalesce(u.birth_date, "") AS birthDate
         """
@@ -42,4 +43,22 @@ class SemanticMemory:
             return True
         except Exception as e:
             print(f"写入负面记忆失败: {e}")
+            return False
+
+    @staticmethod
+    def add_positive_feedback(user_id, memory_entry):
+        """向图谱追加一条正向偏好记忆。"""
+        if not user_id:
+            return False
+
+        cypher = """
+        MATCH (u:User {id: $user_id})
+        SET u.positive_feedback = coalesce(u.positive_feedback, []) + [$memory_entry]
+        RETURN u.positive_feedback
+        """
+        try:
+            graph_db.query(cypher, {"user_id": user_id, "memory_entry": memory_entry})
+            return True
+        except Exception as e:
+            print(f"写入正向记忆失败: {e}")
             return False

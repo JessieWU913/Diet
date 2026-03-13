@@ -3,7 +3,8 @@ from .views import (
     AgentChatView, UserProfileView, UserAuthView, FeedbackView,
     RecipeDetailView, MealEventView, FoodSearchView, DietLogView,
     NutritionSummaryView, RecommendMealsView, FavoriteIngredientsView,
-    SimilarIngredientView, FoodConflictView, UserCollectionView, ChatHistoryView
+    SimilarIngredientView, FoodConflictView, UserCollectionView, ChatHistoryView,
+    IngredientDetailView
 )
 
 urlpatterns = [
@@ -14,6 +15,7 @@ urlpatterns = [
     path('recipe/', RecipeDetailView.as_view(), name='recipe'),
     path('meal-event/', MealEventView.as_view(), name='meal_event'),
     path('food-search/', FoodSearchView.as_view(), name='food_search'),
+    path('ingredient-detail/', IngredientDetailView.as_view(), name='ingredient_detail'),
     path('diet-log/', DietLogView.as_view(), name='diet_log'),
     path('nutrition-summary/', NutritionSummaryView.as_view(), name='nutrition_summary'),
     path('recommend-meals/', RecommendMealsView.as_view(), name='recommend_meals'),

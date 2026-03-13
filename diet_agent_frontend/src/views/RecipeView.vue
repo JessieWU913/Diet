@@ -41,10 +41,10 @@
         <div v-for="recipe in getFilteredRecipes(section.key)" :key="recipe.name" class="recipe-card">
           <div class="rc-name">{{ recipe.name }}</div>
           <div class="rc-macros">
-            <span class="macro cal">{{ recipe.calories || '—' }} kcal</span>
-            <span class="macro protein">{{ recipe.protein || '—' }}g 蛋白</span>
-            <span class="macro fat">{{ recipe.fat || '—' }}g 脂肪</span>
-            <span class="macro carbs">{{ recipe.carbs || '—' }}g 碳水</span>
+            <span class="macro cal">热量 {{ recipe.calories || '—' }} kcal</span>
+            <span class="macro protein">蛋白 {{ recipe.protein || '—' }}g</span>
+            <span class="macro fat">脂肪 {{ recipe.fat || '—' }}g</span>
+            <span class="macro carbs">碳水 {{ recipe.carbs || '—' }}g</span>
           </div>
           <div class="rc-actions">
             <button class="rc-add" @click="addToDietLog(recipe, section.key)">记录饮食</button>
@@ -53,12 +53,14 @@
           </div>
         </div>
 
+        <!-- 每餐小计 -->
         <div class="mc-subtotal" v-if="getFilteredRecipes(section.key).length > 0">
           小计：{{ getMealTotalCalories(section.key) }} kcal
         </div>
       </div>
     </div>
 
+    <!-- 导出的菜谱（来自AI对话） -->
     <div v-if="Object.keys(exportedMeals).length > 0" class="exported-section">
       <h3>AI 导出的菜谱</h3>
       <div v-for="(recipes, date) in exportedMeals" :key="date" class="exported-day">
@@ -67,14 +69,15 @@
           <div v-for="r in recipes" :key="r.id" class="exported-card">
             <div class="ec-name">{{ r.name }}</div>
             <div class="ec-macros">
-              <span>{{ r.calories || '—' }} kcal</span>
-              <span v-if="r.protein">{{ r.protein }}g 蛋白</span>
-              <span v-if="r.fat">{{ r.fat }}g 脂肪</span>
-              <span v-if="r.carbs">{{ r.carbs }}g 碳水</span>
+              <span>热量 {{ r.calories || '—' }} kcal</span>
+              <span v-if="r.protein">蛋白 {{ r.protein }}g</span>
+              <span v-if="r.fat">脂肪 {{ r.fat }}g</span>
+              <span v-if="r.carbs">碳水 {{ r.carbs }}g</span>
             </div>
             <div class="ec-actions">
               <button class="ec-detail" @click="viewDetail(r)">查看做法</button>
               <button class="ec-fav" @click="addToCollection(r)">收藏</button>
+              <button class="ec-del" @click="deleteExportedMeal(date, r.id)">删除</button>
             </div>
           </div>
         </div>
@@ -90,10 +93,11 @@
         </div>
         <div class="dm-body">
           <div class="dm-macros">
-            <span>{{ detailRecipe.calories }} kcal</span>
-            <span>{{ detailRecipe.protein }}g 蛋白</span>
-            <span>{{ detailRecipe.fat }}g 脂肪</span>
-            <span>{{ detailRecipe.carbs }}g 碳水</span>
+            <span>热量 {{ detailRecipe.calories }} kcal</span>
+            <span>蛋白 {{ detailRecipe.protein }}g</span>
+            <span>脂肪 {{ detailRecipe.fat }}g</span>
+            <span>碳水 {{ detailRecipe.carbs }}g</span>
+            <div v-if="detailData && detailData.source" class="dm-source">来源：{{ sourceLabel(detailData.source, detailData.matched_name) }}</div>
           </div>
           <div v-if="detailData" class="dm-content">
             <div v-if="detailData.ingredients" class="dm-section">
@@ -126,9 +130,9 @@ const detailData = ref(null)
 const filters = reactive({ maxCalories: 700, minProtein: 0, maxFat: 50 })
 
 const mealSections = [
-  { key: 'breakfast', label: '早餐', icon: '' },
-  { key: 'lunch', label: '午餐', icon: '' },
-  { key: 'dinner', label: '晚餐', icon: '' },
+  { key: 'breakfast', label: '早餐', icon: '早' },
+  { key: 'lunch', label: '午餐', icon: '中' },
+  { key: 'dinner', label: '晚餐', icon: '晚' },
 ]
 
 // 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
@@ -253,6 +257,30 @@ const formatSteps = (raw) => {
   } catch { return raw.replace(/\n/g, '<br>') }
 }
 
+const sourceLabel = (source, matchedName) => {
+  if (source === 'exact') return '知识图谱精确匹配'
+  if (source === 'fuzzy') return matchedName ? `知识图谱模糊匹配（匹配到：${matchedName}）` : '知识图谱模糊匹配'
+  if (source === 'ai_fallback') return 'AI 补全估算'
+  return '未知来源'
+}
+
+const persistExportedMeals = () => {
+  const key = `diet_meals_${userId || 'guest'}`
+  localStorage.setItem(key, JSON.stringify(exportedMeals.value))
+}
+
+const deleteExportedMeal = (date, mealId) => {
+  const dayMeals = exportedMeals.value[date] || []
+  const nextMeals = dayMeals.filter(m => m.id !== mealId)
+  if (nextMeals.length > 0) {
+    exportedMeals.value[date] = nextMeals
+  } else {
+    delete exportedMeals.value[date]
+  }
+  exportedMeals.value = { ...exportedMeals.value }
+  persistExportedMeals()
+}
+
 const addToCollection = async (recipe) => {
   if (!userId) { alert('请先登录！'); return }
   try {
@@ -327,6 +355,8 @@ onMounted(() => {
 .ec-detail:hover { background: #e3f2fd; }
 .ec-fav { padding: 5px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
 .ec-fav:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }
+.ec-del { padding: 5px 10px; border: 1px solid #e6d1d1; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #b35b5b; transition: .2s; }
+.ec-del:hover { background: #fff1f1; border-color: #d98c8c; color: #9f3d3d; }
 
 /* 详情弹窗 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -336,6 +366,7 @@ onMounted(() => {
 .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #b2bec3; }
 .dm-body { padding: 24px; }
 .dm-macros { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.dm-source { font-size: 12px; color: #6c7a89; margin-bottom: 10px; }
 .dm-macros span { font-size: 14px; padding: 6px 12px; background: #f8f9fa; border-radius: 8px; color: #636e72; }
 .dm-section { margin-bottom: 20px; }
 .dm-section h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }

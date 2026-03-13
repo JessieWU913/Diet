@@ -8,6 +8,7 @@ import StatsView from '../views/StatsView.vue'
 import ChatView from '../views/ChatView.vue'
 import HealthLogView from '../views/HealthLogView.vue'
 import FavoritesView from '../views/FavoritesView.vue'
+import IngredientSearchView from '../views/IngredientSearchView.vue'
 
 const routes = [
   { path: '/', redirect: '/diet-log' },
@@ -18,6 +19,7 @@ const routes = [
   { path: '/chat', name: 'Chat', component: ChatView, meta: { requiresAuth: true } },
   { path: '/health-log', name: 'HealthLog', component: HealthLogView, meta: { requiresAuth: true } },
   { path: '/favorites', name: 'Favorites', component: FavoritesView, meta: { requiresAuth: true } },
+  { path: '/ingredient-search', name: 'IngredientSearch', component: IngredientSearchView, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({

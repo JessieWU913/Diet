@@ -1,9 +1,12 @@
 import uuid
 import json
+import os
+import re
 from datetime import datetime, timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 from .memory.manager import MemoryManager
 from .memory.semantic import SemanticMemory
@@ -13,6 +16,111 @@ from .graph import app
 from .neo4j_service import graph_db
 
 from django.contrib.auth.hashers import make_password, check_password
+
+
+_recipe_enrich_llm = None
+
+
+def _get_recipe_enrich_llm():
+    """懒加载 AI 补全模型，避免影响进程启动。"""
+    global _recipe_enrich_llm
+    if _recipe_enrich_llm is None:
+        _recipe_enrich_llm = ChatOpenAI(
+            base_url=os.getenv("OPENAI_API_BASE"),
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model=os.getenv("LLM_MODEL_NAME"),
+            default_headers={"X-Failover-Enabled": "true"},
+            extra_body={"top_k": 20},
+            max_tokens=600,
+            temperature=0.2,
+        )
+    return _recipe_enrich_llm
+
+
+def _extract_json_object(raw_text: str):
+    """从模型输出中提取 JSON 对象。"""
+    if not raw_text:
+        return None
+    try:
+        return json.loads(raw_text)
+    except Exception:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", raw_text)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except Exception:
+        return None
+
+
+def _ai_complete_recipe(name: str):
+    """当图谱中不存在该菜名时，用 AI 生成可展示的兜底信息。"""
+    try:
+        llm = _get_recipe_enrich_llm()
+        prompt = f"""
+你是营养顾问。请为菜名“{name}”生成估算信息，严格只返回 JSON，不要输出任何额外文字。
+
+JSON 结构必须是：
+{{
+  "calories": 数字,
+  "protein": 数字,
+  "fat": 数字,
+  "carbs": 数字,
+  "ingredients": ["字符串", "字符串"],
+  "steps": ["字符串", "字符串", "字符串"]
+}}
+
+要求：
+1. 数值合理，不要极端。
+2. ingredients 与 steps 要可读、简洁。
+3. 如果菜名看不懂，按清淡家常菜给估算。
+"""
+        response = llm.invoke(prompt)
+        payload = _extract_json_object(response.content if hasattr(response, "content") else str(response))
+        if not payload:
+            return None
+
+        ingredients = payload.get("ingredients", [])
+        steps = payload.get("steps", [])
+
+        if not isinstance(ingredients, list):
+            ingredients = [str(ingredients)] if ingredients else []
+        if not isinstance(steps, list):
+            steps = [str(steps)] if steps else []
+
+        return {
+            "name": name,
+            "calories": float(payload.get("calories", 0) or 0),
+            "protein": float(payload.get("protein", 0) or 0),
+            "fat": float(payload.get("fat", 0) or 0),
+            "carbs": float(payload.get("carbs", 0) or 0),
+            "ingredients": json.dumps(ingredients, ensure_ascii=False),
+            "steps": json.dumps(steps, ensure_ascii=False),
+            "source": "ai_fallback"
+        }
+    except Exception as e:
+        print(f"AI补全失败: {e}")
+        return None
+
+
+def _is_blank_recipe_text(value):
+    if value is None:
+        return True
+    text = str(value).strip()
+    return text == "" or text == "[]"
+
+
+def _to_json_safe(value):
+    """将 Neo4j 特殊类型（如 DateTime）转换为 JSON 可序列化值。"""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_to_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _to_json_safe(v) for k, v in value.items()}
+    return str(value)
 
 # 用户注册与登录接口
 class UserAuthView(APIView):
@@ -138,12 +246,16 @@ class UserProfileView(APIView):
                coalesce(u.weight, 0) AS weight, 
                coalesce(u.allergies, []) AS allergies, 
                coalesce(u.dislikes, []) AS dislikes, 
+               coalesce(u.positive_feedback, []) AS positive_feedback,
                coalesce(u.birth_date, "") AS birthDate
         """
         try:
             result = graph_db.query(cypher, {"user_id": user_id})
             if result:
-                return Response(result[0])
+                data = result[0]
+                pos = data.get("positive_feedback", []) or []
+                data["recent_positive_feedback"] = pos[-5:][::-1]
+                return Response(data)
             return Response({})
         except Exception as e:
             print(f"读取个人中心失败: {e}")
@@ -181,14 +293,20 @@ class FeedbackView(APIView):
         user_id = request.data.get("user_id")
         reason = request.data.get("reason")
         content = request.data.get("content", "")
+        feedback_type = request.data.get("feedback_type", "down")
 
         if not user_id or not reason:
             return Response({"error": "参数不完整"}, status=400)
 
-        success = MemoryManager.save_user_feedback(user_id, reason, content)
+        if feedback_type == "up":
+            success = MemoryManager.save_user_positive_feedback(user_id, reason, content)
+            success_msg = "正向反馈记忆已写入图谱"
+        else:
+            success = MemoryManager.save_user_feedback(user_id, reason, content)
+            success_msg = "反思记忆已写入图谱"
 
         if success:
-            return Response({"status": "success", "message": "反思记忆已写入图谱"})
+            return Response({"status": "success", "message": success_msg})
         else:
             return Response({"error": "记忆写入失败，请检查数据库连接"}, status=500)
 
@@ -201,8 +319,8 @@ class RecipeDetailView(APIView):
         if not names:
             return Response({"error": "未提供菜名"}, status=400)
 
-        # 在数据库里精准匹配这些菜名，把真实数据捞出来
-        cypher = """
+        # 1) 精确匹配
+        exact_cypher = """
         MATCH (n:Recipe)
         WHERE n.name IN $names
         RETURN n.name AS name,
@@ -211,11 +329,109 @@ class RecipeDetailView(APIView):
                n.fat AS fat,
                n.carbs AS carbs,
                n.ingredients_raw AS ingredients,
-               n.steps AS steps
+               n.steps AS steps,
+               'exact' AS source
         """
+
+        # 2) 模糊匹配（用于“名称不完全一致”场景）
+        fuzzy_cypher = """
+        MATCH (n:Recipe)
+        WHERE toLower(n.name) CONTAINS toLower($name)
+           OR toLower($name) CONTAINS toLower(n.name)
+        RETURN n.name AS matched_name,
+               n.calories AS calories,
+               n.protein AS protein,
+               n.fat AS fat,
+               n.carbs AS carbs,
+               n.ingredients_raw AS ingredients,
+               n.steps AS steps
+        ORDER BY size(n.name) ASC
+        LIMIT 1
+        """
+
         try:
-            results = graph_db.query(cypher, {"names": names})
-            return Response({"status": "success", "data": results})
+            exact_results = graph_db.query(exact_cypher, {"names": names})
+            exact_map = {item["name"]: item for item in exact_results}
+
+            final_results = []
+            for name in names:
+                # exact 命中
+                if name in exact_map:
+                    item = exact_map[name]
+                    if _is_blank_recipe_text(item.get("steps")) or _is_blank_recipe_text(item.get("ingredients")):
+                        ai_item = _ai_complete_recipe(name)
+                        if ai_item:
+                            if _is_blank_recipe_text(item.get("ingredients")):
+                                item["ingredients"] = ai_item.get("ingredients", item.get("ingredients"))
+                            if _is_blank_recipe_text(item.get("steps")):
+                                item["steps"] = ai_item.get("steps", item.get("steps"))
+                            if not item.get("calories"):
+                                item["calories"] = ai_item.get("calories", item.get("calories"))
+                            if not item.get("protein"):
+                                item["protein"] = ai_item.get("protein", item.get("protein"))
+                            if not item.get("fat"):
+                                item["fat"] = ai_item.get("fat", item.get("fat"))
+                            if not item.get("carbs"):
+                                item["carbs"] = ai_item.get("carbs", item.get("carbs"))
+                            item["source"] = "exact+ai_fill"
+                    final_results.append(item)
+                    continue
+
+                # fuzzy 命中
+                fuzzy = graph_db.query(fuzzy_cypher, {"name": name})
+                if fuzzy:
+                    f = fuzzy[0]
+                    resolved_name = f.get("matched_name") or name
+                    fuzzy_item = {
+                        "name": resolved_name,
+                        "requested_name": name,
+                        "calories": f.get("calories"),
+                        "protein": f.get("protein"),
+                        "fat": f.get("fat"),
+                        "carbs": f.get("carbs"),
+                        "ingredients": f.get("ingredients"),
+                        "steps": f.get("steps"),
+                        "source": "fuzzy",
+                        "matched_name": f.get("matched_name")
+                    }
+
+                    if _is_blank_recipe_text(fuzzy_item.get("steps")) or _is_blank_recipe_text(fuzzy_item.get("ingredients")):
+                        ai_item = _ai_complete_recipe(resolved_name)
+                        if ai_item:
+                            if _is_blank_recipe_text(fuzzy_item.get("ingredients")):
+                                fuzzy_item["ingredients"] = ai_item.get("ingredients", fuzzy_item.get("ingredients"))
+                            if _is_blank_recipe_text(fuzzy_item.get("steps")):
+                                fuzzy_item["steps"] = ai_item.get("steps", fuzzy_item.get("steps"))
+                            if not fuzzy_item.get("calories"):
+                                fuzzy_item["calories"] = ai_item.get("calories", fuzzy_item.get("calories"))
+                            if not fuzzy_item.get("protein"):
+                                fuzzy_item["protein"] = ai_item.get("protein", fuzzy_item.get("protein"))
+                            if not fuzzy_item.get("fat"):
+                                fuzzy_item["fat"] = ai_item.get("fat", fuzzy_item.get("fat"))
+                            if not fuzzy_item.get("carbs"):
+                                fuzzy_item["carbs"] = ai_item.get("carbs", fuzzy_item.get("carbs"))
+                            fuzzy_item["source"] = "fuzzy+ai_fill"
+
+                    final_results.append(fuzzy_item)
+                    continue
+
+                # AI 补全
+                ai_item = _ai_complete_recipe(name)
+                if ai_item:
+                    final_results.append(ai_item)
+                else:
+                    final_results.append({
+                        "name": name,
+                        "calories": 0,
+                        "protein": 0,
+                        "fat": 0,
+                        "carbs": 0,
+                        "ingredients": "",
+                        "steps": "",
+                        "source": "empty"
+                    })
+
+            return Response({"status": "success", "data": final_results})
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
@@ -258,6 +474,112 @@ class FoodSearchView(APIView):
         try:
             results = graph_db.query(cypher, {"keyword": keyword})
             return Response({"data": results})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class IngredientDetailView(APIView):
+    """食材详情查询：完整营养属性 + 关系图信息（互补/互斥/重叠）"""
+    def get(self, request):
+        name = request.query_params.get("name", "").strip()
+        if not name:
+            return Response({"error": "请输入食材名"}, status=400)
+
+        ingredient_cypher = """
+        MATCH (i:Ingredient)
+        WHERE toLower(i.name) = toLower($name)
+           OR toLower(i.name) CONTAINS toLower($name)
+           OR toLower($name) CONTAINS toLower(i.name)
+        RETURN i.name AS name, properties(i) AS props
+        ORDER BY CASE WHEN toLower(i.name) = toLower($name) THEN 0 ELSE 1 END, size(i.name) ASC
+        LIMIT 1
+        """
+
+        relation_cypher = """
+        MATCH (i:Ingredient {name: $name})
+        OPTIONAL MATCH (i)-[r]-(other:Ingredient)
+        RETURN type(r) AS relation_type,
+               other.name AS related_name,
+               coalesce(r.reason, r.desc, '') AS reason,
+               CASE WHEN startNode(r) = i THEN 'out' ELSE 'in' END AS direction
+        LIMIT 300
+        """
+
+        try:
+            ingredient_result = graph_db.query(ingredient_cypher, {"name": name})
+            if not ingredient_result:
+                return Response({"error": "未找到该食材"}, status=404)
+
+            item = ingredient_result[0]
+            ingredient_name = item.get("name")
+            props = item.get("props") or {}
+
+            nutrients_raw = props.get("nutrients_raw")
+            nutrients_detail = {}
+            if nutrients_raw:
+                try:
+                    parsed = json.loads(nutrients_raw)
+                    if isinstance(parsed, dict):
+                        nutrients_detail = parsed
+                except Exception:
+                    nutrients_detail = {"raw_text": str(nutrients_raw)}
+
+            relation_rows = graph_db.query(relation_cypher, {"name": ingredient_name})
+
+            complement_types = {"SYNERGY_WITH", "MATCH_WITH", "PAIR_WITH", "COMPLEMENT_WITH", "GOOD_WITH", "SUITABLE_WITH"}
+            conflict_types = {"CLASH_WITH", "CONFLICTS_WITH", "INCOMPATIBLE_WITH", "AVOID_WITH", "RESTRAIN_WITH"}
+            overlap_types = {"OVERLAP_WITH", "SIMILAR_TO", "SUBSTITUTE_WITH", "SAME_CATEGORY_WITH"}
+
+            complements, conflicts, overlaps, all_relations = [], [], [], []
+
+            for r in relation_rows:
+                r_type = (r.get("relation_type") or "").upper()
+                target = r.get("related_name")
+                reason = r.get("reason") or ""
+                direction = r.get("direction") or "out"
+                if not r_type or not target:
+                    continue
+
+                row = {
+                    "name": target,
+                    "reason": reason,
+                    "relation_type": r_type,
+                    "direction": direction,
+                }
+                all_relations.append(row)
+
+                reason_text = str(reason)
+                if r_type in complement_types or ("互补" in reason_text or "相宜" in reason_text or "搭配" in reason_text):
+                    complements.append(row)
+                elif r_type in conflict_types or ("禁忌" in reason_text or "相克" in reason_text or "冲突" in reason_text):
+                    conflicts.append(row)
+                elif r_type in overlap_types or ("重叠" in reason_text or "类似" in reason_text):
+                    overlaps.append(row)
+
+            cleaned_props = {}
+            for k, v in props.items():
+                if v is None:
+                    continue
+                if isinstance(v, str) and len(v.strip()) == 0:
+                    continue
+                if k in {"embedding", "vector", "feature_vector"}:
+                    continue
+                cleaned_props[k] = _to_json_safe(v)
+
+            return Response({
+                "status": "success",
+                "data": {
+                    "name": ingredient_name,
+                    "all_properties": cleaned_props,
+                    "nutrients_detail": _to_json_safe(nutrients_detail),
+                    "relations": {
+                        "complements": _to_json_safe(complements),
+                        "conflicts": _to_json_safe(conflicts),
+                        "overlaps": _to_json_safe(overlaps),
+                        "all": _to_json_safe(all_relations),
+                    }
+                }
+            })
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
@@ -603,6 +925,26 @@ class UserCollectionView(APIView):
                       c.protein = $protein, c.fat = $fat, c.carbs = $carbs,
                       c.ingredients_raw = $ingredients_raw, c.steps = $steps,
                       c.added_at = $added_at
+                ON MATCH SET c.calories = CASE
+                                                WHEN coalesce(c.calories, 0) = 0 AND $calories > 0 THEN $calories
+                                                ELSE c.calories END,
+                                            c.protein = CASE
+                                                WHEN coalesce(c.protein, 0) = 0 AND $protein > 0 THEN $protein
+                                                ELSE c.protein END,
+                                            c.fat = CASE
+                                                WHEN coalesce(c.fat, 0) = 0 AND $fat > 0 THEN $fat
+                                                ELSE c.fat END,
+                                            c.carbs = CASE
+                                                WHEN coalesce(c.carbs, 0) = 0 AND $carbs > 0 THEN $carbs
+                                                ELSE c.carbs END,
+                                            c.ingredients_raw = CASE
+                                                WHEN c.ingredients_raw IS NULL OR trim(toString(c.ingredients_raw)) = '' OR trim(toString(c.ingredients_raw)) = '[]'
+                                                THEN $ingredients_raw
+                                                ELSE c.ingredients_raw END,
+                                            c.steps = CASE
+                                                WHEN c.steps IS NULL OR trim(toString(c.steps)) = '' OR trim(toString(c.steps)) = '[]'
+                                                THEN $steps
+                                                ELSE c.steps END
         MERGE (u)-[:COLLECTED]->(c)
         RETURN c.id AS id
         """

@@ -20,6 +20,9 @@
         <router-link to="/chat" class="nav-item">
           <span class="nav-icon"></span><span>AI 助手</span>
         </router-link>
+        <router-link to="/ingredient-search" class="nav-item">
+          <span class="nav-icon"></span><span>食材查询</span>
+        </router-link>
         <router-link to="/health-log" class="nav-item">
           <span class="nav-icon"></span><span>健康日志</span>
         </router-link>
@@ -108,6 +111,14 @@
                 <input v-model="dislikeInput" @keyup.enter.prevent="addDislike" placeholder="回车添加..." class="tag-input" />
               </div>
             </div>
+
+            <div class="pm-field full">
+              <label>反馈学习记录（最近 5 条点赞）</label>
+              <div v-if="recentPositiveFeedback.length === 0" class="feedback-empty">暂无点赞学习记录</div>
+              <div v-else class="feedback-list">
+                <div class="feedback-item" v-for="(item, idx) in recentPositiveFeedback" :key="'pf'+idx">{{ item }}</div>
+              </div>
+            </div>
           </div>
 
           <div class="pm-actions">
@@ -134,6 +145,7 @@ const userId = ref(localStorage.getItem('user_id') || '')
 const userName = ref(localStorage.getItem('user_name') || '')
 const allergyInput = ref('')
 const dislikeInput = ref('')
+const recentPositiveFeedback = ref([])
 
 const userInitial = computed(() => {
   return (userName.value || userId.value || '?')[0].toUpperCase()
@@ -155,6 +167,7 @@ const loadProfile = async () => {
       profileForm.value.weight = res.data.weight || ''
       profileForm.value.allergies = res.data.allergies || []
       profileForm.value.dislikes = res.data.dislikes || []
+      recentPositiveFeedback.value = res.data.recent_positive_feedback || []
     }
   } catch (e) { console.error('加载画像失败', e) }
 }
@@ -304,6 +317,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 }
 .tag-x { cursor: pointer; font-weight: 700; color: #e74c3c; }
 .tag-input { border: none; outline: none; flex: 1; min-width: 80px; font-size: 14px; padding: 4px; }
+
+.feedback-empty {
+  font-size: 12px;
+  color: #b2bec3;
+  background: #fafbfc;
+  border: 1px dashed #e6ebef;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.feedback-list { display: flex; flex-direction: column; gap: 8px; }
+
+.feedback-item {
+  font-size: 12px;
+  color: #4d5b66;
+  background: #f5f8ff;
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  line-height: 1.5;
+}
 
 .pm-actions { display: flex; gap: 12px; margin-top: 24px; }
 .pm-save {

@@ -40,7 +40,7 @@
 
       <!-- 快捷问题 -->
       <div class="quick-section">
-        <h4>⚡ 快捷提问</h4>
+        <h4>快捷提问</h4>
         <button v-for="q in quickQuestions" :key="q" class="quick-btn" @click="askQuick(q)">{{ q }}</button>
       </div>
     </aside>
@@ -59,28 +59,57 @@
             </div>
             <div class="msg-content" v-html="formatMessage(msg.answer || msg.content)"></div>
 
-            <div v-if="msg.role === 'assistant' && isRecipeReply(msg)" class="export-block">
-              <div v-if="!msg.exported" class="export-prompt">
-                <span>检测到菜谱推荐</span>
-                <div class="export-row">
-                  <input type="date" v-model="msg.exportDate" class="date-input" />
-                  <button class="export-btn" @click="exportToMenu(msg)">导出至食谱推荐</button>
-                </div>
-              </div>
-              <div v-else class="export-done">已导出至食谱推荐页</div>
-            </div>
-
-            <!-- 反馈按钮 -->
-            <div v-if="msg.role === 'assistant' && idx > 0" class="feedback-row">
-              <button :class="{ active: msg.feedback === 'up' }" @click="rate(msg, 'up')" :disabled="msg.feedbackSubmitted">👍</button>
-              <button :class="{ active: msg.feedback === 'down' }" @click="rate(msg, 'down')" :disabled="msg.feedbackSubmitted">👎</button>
+            <div v-if="msg.role === 'assistant' && idx > 0" class="msg-actions">
+              <button class="act-btn" :class="{ active: msg.feedback === 'up' }" @click="rate(msg, 'up')" :disabled="msg.feedbackSubmitted" title="点赞反馈">点赞</button>
+              <button class="act-btn" :class="{ active: msg.feedback === 'down' }" @click="rate(msg, 'down')" :disabled="msg.feedbackSubmitted" title="点踩反馈">点踩</button>
+              <button class="act-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复">↻ 重新生成</button>
+              <button class="act-btn" @click="copyMessage(msg)" title="复制这条回复">⧉ 复制</button>
+              <button class="act-btn" @click="openExportModal(msg)" :disabled="(msg.detectedRecipeNames || []).length === 0" title="导出到食谱推荐页">⇪ 导出 {{ (msg.detectedRecipeNames || []).length > 0 ? `(${(msg.detectedRecipeNames || []).length})` : '' }}</button>
             </div>
 
             <!-- 差评原因 -->
             <div v-if="msg.showReasons && !msg.feedbackSubmitted" class="reason-panel">
-              <p>请选择原因（Agent 会更新图谱黑名单）：</p>
-              <div class="reason-tags">
-                <span v-for="r in reasons" :key="r.text" class="r-tag" @click="submitFeedback(msg, r.text)">{{ r.icon }} {{ r.label }}</span>
+              <p>请选择不满意的菜品与原因（不会默认拉黑所有菜）：</p>
+
+              <div class="reason-block">
+                <div class="reason-label">针对菜品（可多选）</div>
+                <div class="reason-tags">
+                  <span
+                    v-for="name in msg.feedbackRecipes"
+                    :key="name"
+                    class="r-tag"
+                    :class="{ active: (msg.selectedRecipes || []).includes(name) }"
+                    @click="toggleSelectedRecipe(msg, name)"
+                  >{{ name }}</span>
+                </div>
+              </div>
+
+              <div class="reason-block">
+                <div class="reason-label">不满意类型</div>
+                <div class="reason-tags">
+                  <span
+                    v-for="r in reasonTypes"
+                    :key="r.value"
+                    class="r-tag"
+                    :class="{ active: msg.feedbackReasonType === r.value }"
+                    @click="msg.feedbackReasonType = r.value"
+                  >{{ r.label }}</span>
+                </div>
+              </div>
+
+              <div v-if="msg.feedbackReasonType === 'ingredient'" class="reason-block">
+                <div class="reason-label">不满意食材（可选）</div>
+                <input v-model="msg.selectedIngredient" class="reason-input" placeholder="例如：香菜、洋葱、辣椒" />
+              </div>
+
+              <div class="reason-block">
+                <div class="reason-label">补充说明（可选）</div>
+                <textarea v-model="msg.customReason" class="reason-textarea" rows="2" placeholder="可填写更具体的原因"></textarea>
+              </div>
+
+              <div class="reason-actions">
+                <button class="reason-cancel" @click="msg.showReasons = false">取消</button>
+                <button class="reason-submit" @click="submitDownFeedback(msg)">提交反馈</button>
               </div>
             </div>
 
@@ -98,6 +127,36 @@
         <input v-model="userInput" @keyup.enter="sendMessage" placeholder="说点什么吧，例如：推荐一道低卡晚餐..." :disabled="isLoading" />
         <button @click="sendMessage" :disabled="isLoading || !userInput.trim()">发送</button>
       </div>
+
+      <div v-if="showExportModal" class="export-modal-overlay" @click.self="showExportModal = false">
+        <div class="export-modal">
+          <h4>导出到食谱推荐页</h4>
+          <p>已识别 {{ exportCandidates.length }} 个菜名，请勾选后导出</p>
+
+          <div class="export-preview">
+            <div class="export-preview-header">
+              <span>可导出菜名</span>
+              <button class="preview-toggle" @click="toggleSelectAllExportCandidates">
+                {{ selectedExportNames.length === exportCandidates.length ? '全不选' : '全选' }}
+              </button>
+            </div>
+            <div class="export-preview-list">
+              <label v-for="name in exportCandidates" :key="name" class="export-preview-item">
+                <input type="checkbox" :value="name" v-model="selectedExportNames" />
+                <span>{{ name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <input type="date" v-model="exportDate" class="export-date-input" />
+          <div class="export-modal-actions">
+            <button class="em-cancel" @click="showExportModal = false">取消</button>
+            <button class="em-confirm" :disabled="!exportDate || selectedExportNames.length === 0 || isExporting" @click="confirmExport">{{ isExporting ? '导出中...' : '确认导出' }}</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="toastText" class="chat-toast">{{ toastText }}</div>
     </main>
   </div>
 </template>
@@ -114,9 +173,24 @@ const userInput = ref('')
 const isLoading = ref(false)
 const chatWindowRef = ref(null)
 const currentSessionId = ref('')
+const showExportModal = ref(false)
+const pendingExportMsg = ref(null)
+const exportDate = ref(new Date().toISOString().split('T')[0])
+const exportCandidates = ref([])
+const selectedExportNames = ref([])
+const isExporting = ref(false)
+const toastText = ref('')
+let toastTimer = null
 
 const messages = ref([
-  { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！我是智能膳食助手。告诉我你想吃什么，或者冰箱有什么食材，我来帮你搭配！`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
+  {
+    role: 'assistant',
+    content: `你好${userName.value ? '，' + userName.value : ''}！我是智能膳食助手。告诉我你想吃什么，或者冰箱有什么食材，我来帮你搭配！`,
+    thinking: '', answer: '', thinkingCollapsed: true,
+    feedback: null, showReasons: false, feedbackSubmitted: false, exported: false,
+    feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'dish', selectedIngredient: '', customReason: '',
+    detectedRecipeNames: []
+  }
 ])
 
 const parseAIResponse = (text) => {
@@ -144,11 +218,11 @@ const quickQuestions = [
   '今天吃了火锅，怎么补救？',
 ]
 
-const reasons = [
-  { icon: '🚫', label: '菜品拉黑', text: '推荐的菜品难吃，加入黑名单' },
-  { icon: '🛢️', label: '太油腻', text: '烹饪做法太油腻/不健康' },
-  { icon: '⚖️', label: '热量不符', text: '热量或分量不符合我的减脂预期' },
-  { icon: '🥣', label: '吃不饱', text: '推荐的食物吃不饱，缺乏饱腹感' },
+const reasonTypes = [
+  { value: 'dish', label: '菜品不满意' },
+  { value: 'ingredient', label: '食材不满意' },
+  { value: 'nutrition', label: '营养不符合预期' },
+  { value: 'other', label: '其他原因' },
 ]
 
 const toggleMode = () => { isWeightLossMode.value = !isWeightLossMode.value }
@@ -213,9 +287,12 @@ const loadSession = (session) => {
       return {
         role: m.role, content: m.content,
         thinking, answer, thinkingCollapsed: true,
-        feedback: null, showReasons: false, feedbackSubmitted: false, exported: false
+        feedback: null, showReasons: false, feedbackSubmitted: false, exported: false,
+        feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'dish', selectedIngredient: '', customReason: '',
+        detectedRecipeNames: []
       }
     })
+    hydrateDetectedRecipeNames(messages.value)
   }
   scrollBottom()
 }
@@ -223,7 +300,7 @@ const loadSession = (session) => {
 const startNewChat = () => {
   currentSessionId.value = ''
   messages.value = [
-    { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！有什么想吃的？`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false }
+    { role: 'assistant', content: `你好${userName.value ? '，' + userName.value : ''}！有什么想吃的？`, thinking: '', answer: '', thinkingCollapsed: true, feedback: null, showReasons: false, feedbackSubmitted: false, exported: false, feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'dish', selectedIngredient: '', customReason: '', detectedRecipeNames: [] }
   ]
 }
 
@@ -240,6 +317,14 @@ const formatSessionDate = (dt) => {
   return dt.slice(5, 16)
 }
 
+const buildEnrichedQuery = (text) => {
+  let enriched = text
+  if (favorites.value.length > 0) {
+    enriched += `\n（用户偏好食材：${favorites.value.join('、')}，请在推荐时优先考虑这些食材）`
+  }
+  return enriched
+}
+
 // 发送消息 —— 将偏好食材融入提问
 const sendMessage = async () => {
   const text = userInput.value.trim()
@@ -249,11 +334,7 @@ const sendMessage = async () => {
   isLoading.value = true
   scrollBottom()
 
-  // 将偏好食材拼入实际发给后端的 query
-  let enrichedQuery = text
-  if (favorites.value.length > 0) {
-    enrichedQuery += `\n（用户偏好食材：${favorites.value.join('、')}，请在推荐时优先考虑这些食材）`
-  }
+  const enrichedQuery = buildEnrichedQuery(text)
 
   try {
     const res = await API.post('/chat/', {
@@ -268,12 +349,14 @@ const sendMessage = async () => {
       role: 'assistant', content: res.data.response,
       thinking, answer, thinkingCollapsed: true,
       feedback: null, showReasons: false, feedbackSubmitted: false,
-      exportDate: today, exported: false
+      exportDate: today, exported: false,
+      feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'dish', selectedIngredient: '', customReason: '',
+      detectedRecipeNames: extractRecipeNames(answer || res.data.response || '')
     })
     // 自动保存对话
     saveCurrentSession()
   } catch (e) {
-    messages.value.push({ role: 'assistant', content: '[网络异常] 无法连接后端，请确认 Django 已启动。', feedback: null, showReasons: false, feedbackSubmitted: false, exported: false })
+    messages.value.push({ role: 'assistant', content: '[网络异常] 无法连接后端，请确认 Django 已启动。', feedback: null, showReasons: false, feedbackSubmitted: false, exported: false, feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'other', selectedIngredient: '', customReason: '', detectedRecipeNames: [] })
   } finally {
     isLoading.value = false
     scrollBottom()
@@ -290,28 +373,187 @@ const scrollBottom = async () => {
 }
 
 // 菜谱导出 —— 导出到 localStorage，RecipeView 会读取
-const isRecipeReply = (msg) => {
-  const text = msg.answer || msg.content || ''
-  return text.includes('**') && (text.includes('热量') || text.includes('卡') || text.includes('kcal') || text.includes('推荐'))
-}
-
 const extractRecipeNames = (text) => {
   const names = []
-  const regex = /\*\*([^*\n]+)\*\*/g
-  let m
-  const exclude = new Set(['主食','主菜','配菜','晚餐','加餐','早餐','午餐','注意','建议','总计','热量','蛋白质','特点','步骤','食材','汤','粥','做法','准备','总结'])
-  while ((m = regex.exec(text)) !== null) {
-    let name = m[1].trim().replace(/^[0-9.\-\s]+/, '').replace(/[:：].*/, '').trim()
-    if (name && !exclude.has(name) && name.length >= 2 && name.length <= 12) names.push(name)
+  const safeText = text || ''
+  const exclude = new Set([
+    '主食', '主菜', '配菜', '晚餐', '加餐', '早餐', '午餐', '注意', '建议', '总计', '热量', '蛋白质',
+    '特点', '步骤', '食材', '做法', '准备', '总结', '搭配', '方案', '推荐', '菜单', '营养', '说明',
+    '基础版', '升级建议', '可选项', '可替换项',
+    '推荐组合', '蔬菜拼盘', '点睛之笔', '便当小贴士', '小贴士', '小技巧', '彩虹能量午餐盒',
+    '优质蛋白', '膳食纤维', '维生素K', '特调酱汁', '隐藏彩蛋', '夜食秘诀', '营养解码', '主菜组合',
+  ])
+
+  const blockedFragments = [
+    '升级建议', '如果还有', '可以加', '替代', '提升', '补充', '基础版', '可选', '建议', '做法',
+    '推荐组合', '便当小贴士', '小技巧', '点睛之笔', '蔬菜拼盘', '总热量', '需要调整',
+  ]
+
+  const pushName = (raw) => {
+    let name = (raw || '')
+      .trim()
+      .replace(/^[0-9一二三四五六七八九十]+[.、)\s-]*/, '')
+      .replace(/^[\-•·●]\s*/, '')
+      .replace(/[：:].*$/, '')
+      .replace(/[（(].*$/, '')
+      .trim()
+    if (!name) return
+    if (name.length < 2 || name.length > 14) return
+    if (exclude.has(name)) return
+    if (blockedFragments.some(f => name.includes(f))) return
+    if (/^(加|撒|用).{1,12}$/.test(name)) return
+    if (/(蛋白|脂肪|碳水|膳食纤维|维生素|含量|mg|μg|omega|Ω-?3)/i.test(name)) return
+    if (/^(主菜|碳水|蔬菜拼盘|点睛之笔|小贴士)[：:]?$/.test(name)) return
+    if (/^(热量|蛋白|脂肪|碳水|卡路里|kcal)/i.test(name)) return
+    names.push(name)
   }
+
+  // A) 固定导出格式优先：- [菜品] XXX / - 【菜品】XXX
+  const fixedTagRegex = /(?:^|\n)\s*(?:[-•·●]|\d+[.、)])?\s*(?:\[菜品\]|【菜品】)\s*([^\n（(：:]{2,20})/g
+  let ft
+  while ((ft = fixedTagRegex.exec(safeText)) !== null) {
+    pushName(ft[1])
+  }
+  if (names.length > 0) {
+    return [...new Set(names)]
+  }
+
+  // 0) 结构化文本优先提取：
+  // 例如："1️⃣ **主菜：香煎鸡胸肉（120g）**" -> 提取 "香煎鸡胸肉"
+  const sectionDishRegex = /\d+[️⃣]?\s*\*{0,2}\s*(?:主菜|碳水|汤品|甜品|饮品)\s*[：:]\s*([^\n（(\*]{2,20})/g
+  let sd
+  while ((sd = sectionDishRegex.exec(safeText)) !== null) {
+    pushName(sd[1])
+  }
+
+  // 0.5) 食材条目提取：
+  // 例如："- 西兰花（50g，蒸）：18卡"、"- 牛油果30g（48卡）"
+  const ingredientLineRegex = /(?:^|\n)\s*[-•·●]\s*([^\n：:（(]{2,20}?)(?:（|\d+\s*(?:g|克|颗|个))/g
+  let il
+  while ((il = ingredientLineRegex.exec(safeText)) !== null) {
+    pushName(il[1])
+  }
+
+  // 优先提取“推荐菜式/推荐菜品/推荐菜谱”主菜名
+  const mainDishPatterns = [
+    /[【\[]?推荐菜式[】\]]?\s*(?:[：:]\s*)?([^\n。；;]+)/g,
+    /[【\[]?推荐菜品[】\]]?\s*(?:[：:]\s*)?([^\n。；;]+)/g,
+    /[【\[]?推荐菜谱[】\]]?\s*(?:[：:]\s*)?([^\n。；;]+)/g,
+    /[【\[]?推荐方案[】\]]?\s*(?:[：:]\s*)?([^\n。；;]+)/g,
+  ]
+
+  for (const pattern of mainDishPatterns) {
+    let m
+    while ((m = pattern.exec(safeText)) !== null) {
+      const part = (m[1] || '').split(/[、，,\/|]/)
+      part.forEach(pushName)
+    }
+  }
+
+  // 1) 加粗提取
+  const boldRegex = /\*\*([^*\n]+)\*\*/g
+  let m
+  while ((m = boldRegex.exec(safeText)) !== null) {
+    pushName(m[1])
+  }
+
+  // 2) 按行提取（仅在明显是菜品列表时启用，避免把“升级建议”当菜名）
+  safeText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const likelyDishList = /(推荐菜|菜单|今日推荐|可选菜品|套餐)/.test(safeText)
+      const hasSuggestionHints = /(升级建议|如果还有|可以加|替代|提升|补充)/.test(line)
+      if (likelyDishList && !hasSuggestionHints && /^([0-9一二三四五六七八九十]+[.、)]|[\-•·●])/.test(line)) {
+        pushName(line)
+      }
+    })
+
+  // 3) 兜底：句内“推荐：A、B、C”样式
+  const recommendMatch = safeText.match(/推荐[^\n：:]*[：:]\s*([^\n]+)/)
+  if (recommendMatch && recommendMatch[1]) {
+    recommendMatch[1]
+      .split(/[、，,\/|]/)
+      .map(s => s.trim())
+      .forEach(pushName)
+  }
+
   return [...new Set(names)]
 }
 
-const exportToMenu = async (msg) => {
+const isRecipeReply = (msg) => {
+  return getDetectedRecipeCount(msg) > 0
+}
+
+const getDetectedRecipeCount = (msg) => {
+  if (!msg || msg.role !== 'assistant') return 0
+  if (!Array.isArray(msg.detectedRecipeNames)) {
+    const text = msg.answer || msg.content || ''
+    msg.detectedRecipeNames = extractRecipeNames(text).filter(n => !/^(加|撒|用).{1,12}$/.test(n))
+  }
+  return msg.detectedRecipeNames.length
+}
+
+const hydrateDetectedRecipeNames = (list) => {
+  ;(list || []).forEach((msg) => {
+    if (msg.role !== 'assistant') return
+    if (!Array.isArray(msg.detectedRecipeNames)) {
+      const text = msg.answer || msg.content || ''
+      msg.detectedRecipeNames = extractRecipeNames(text).filter(n => !/^(加|撒|用).{1,12}$/.test(n))
+    }
+  })
+}
+
+const openExportModal = (msg) => {
+  getDetectedRecipeCount(msg)
+  const names = msg.detectedRecipeNames || []
+
+  pendingExportMsg.value = msg
+  exportDate.value = msg.exportDate || new Date().toISOString().split('T')[0]
+  if (names.length === 0) {
+    showToast('未识别到可导出的菜名')
+    return
+  }
+  exportCandidates.value = [...new Set(names)]
+  selectedExportNames.value = [...exportCandidates.value]
+  showExportModal.value = true
+}
+
+const toggleSelectAllExportCandidates = () => {
+  if (selectedExportNames.value.length === exportCandidates.value.length) {
+    selectedExportNames.value = []
+  } else {
+    selectedExportNames.value = [...exportCandidates.value]
+  }
+}
+
+const showToast = (text) => {
+  toastText.value = text
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastText.value = '' }, 1800)
+}
+
+const confirmExport = async () => {
+  if (!pendingExportMsg.value || isExporting.value) return
+  isExporting.value = true
+  try {
+    pendingExportMsg.value.exportDate = exportDate.value
+    await exportToMenu(pendingExportMsg.value, selectedExportNames.value)
+    showExportModal.value = false
+    showToast('已导出到食谱推荐页')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const exportToMenu = async (msg, overrideRecipeNames = null) => {
   if (!msg.exportDate) { alert('请选择日期！'); return }
   const answerText = msg.answer || msg.content
-  const recipeNames = extractRecipeNames(answerText)
-  if (recipeNames.length === 0) { alert('未能提取到有效菜名。请确认 AI 回答中有**加粗**的菜品名称。'); return }
+  const recipeNames = overrideRecipeNames && overrideRecipeNames.length > 0
+    ? [...new Set(overrideRecipeNames)]
+    : extractRecipeNames(answerText).filter(n => !/^(加|撒|用).{1,12}$/.test(n))
+  if (recipeNames.length === 0) { alert('未能提取到有效菜名，请让 AI 明确列出菜品名称后再导出。'); return }
 
   const key = `diet_meals_${userId.value || 'guest'}`
   const saved = JSON.parse(localStorage.getItem(key) || '{}')
@@ -320,9 +562,10 @@ const exportToMenu = async (msg) => {
   try {
     const res = await API.post('/recipe/', { names: recipeNames })
     const dbItems = res.data.data || []
-    const dbNames = new Set(dbItems.map(r => r.name))
 
-    // 数据库找到的菜品使用完整信息
+    const returnedNameKeys = new Set(dbItems.map(item => item.requested_name || item.name))
+
+    // 命中Neo4j或AI补全后的结果都统一导出
     dbItems.forEach(item => {
       saved[msg.exportDate].push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
@@ -332,23 +575,38 @@ const exportToMenu = async (msg) => {
         fat: item.fat || 0,
         carbs: item.carbs || 0,
         ingredients: item.ingredients || '',
-        steps: item.steps || ''
+        steps: item.steps || '',
+        source: item.source || 'unknown'
       })
     })
 
-    // 数据库没有的菜品只保存菜名（仍可收藏/参考）
-    recipeNames.filter(n => !dbNames.has(n)).forEach(name => {
+    // 后端若有漏返回，兜底仍保留菜名
+    recipeNames.filter(name => !returnedNameKeys.has(name)).forEach(name => {
       saved[msg.exportDate].push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-        name, calories: 0, protein: 0, fat: 0, carbs: 0, ingredients: '', steps: ''
+        name,
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+        ingredients: '',
+        steps: '',
+        source: 'fallback_name_only'
       })
     })
   } catch (e) {
-    // 请求失败时也保存菜名
+    // 接口异常时，至少先导出菜名，不阻断用户流程
     recipeNames.forEach(name => {
       saved[msg.exportDate].push({
         id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-        name, calories: 0, protein: 0, fat: 0, carbs: 0, ingredients: '', steps: ''
+        name,
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+        ingredients: '',
+        steps: '',
+        source: 'fallback_name_only'
       })
     })
   }
@@ -361,16 +619,126 @@ const exportToMenu = async (msg) => {
 const rate = (msg, type) => {
   if (msg.feedbackSubmitted) return
   msg.feedback = type
-  msg.showReasons = type === 'down'
+  if (type === 'down') {
+    const recipeNames = extractRecipeNames(msg.answer || msg.content || '')
+    msg.feedbackRecipes = recipeNames
+    msg.selectedRecipes = recipeNames.length > 0 ? [recipeNames[0]] : []
+    msg.feedbackReasonType = 'dish'
+    msg.selectedIngredient = ''
+    msg.customReason = ''
+    msg.showReasons = true
+  } else {
+    msg.showReasons = false
+    submitFeedback(msg, '回答有帮助，方向正确', 'up')
+  }
 }
 
-const submitFeedback = async (msg, reason) => {
+const toggleSelectedRecipe = (msg, name) => {
+  const current = new Set(msg.selectedRecipes || [])
+  if (current.has(name)) {
+    current.delete(name)
+  } else {
+    current.add(name)
+  }
+  msg.selectedRecipes = [...current]
+}
+
+const submitDownFeedback = (msg) => {
+  const selected = msg.selectedRecipes || []
+  const reasonTypeMap = {
+    dish: '菜品不满意',
+    ingredient: '食材不满意',
+    nutrition: '营养不符合预期',
+    other: '其他原因',
+  }
+
+  const parts = []
+  parts.push(`类型：${reasonTypeMap[msg.feedbackReasonType] || '其他原因'}`)
+  if (selected.length > 0) parts.push(`菜品：${selected.join('、')}`)
+  if (msg.selectedIngredient) parts.push(`食材：${msg.selectedIngredient}`)
+  if (msg.customReason) parts.push(`补充：${msg.customReason}`)
+
+  if (parts.length === 1 && !msg.customReason) {
+    alert('请至少选择具体菜品，或填写食材/补充原因。')
+    return
+  }
+
+  submitFeedback(msg, parts.join('；'), 'down')
+}
+
+const submitFeedback = async (msg, reason, feedbackType = 'down') => {
   if (!userId.value) { alert('请先登录后再反馈！'); return }
   msg.showReasons = false
   msg.feedbackSubmitted = true
   try {
-    await API.post('/feedback/', { user_id: userId.value, reason, content: msg.content })
+    await API.post('/feedback/', {
+      user_id: userId.value,
+      reason,
+      content: msg.content,
+      feedback_type: feedbackType
+    })
   } catch (e) { msg.feedbackSubmitted = false }
+}
+
+const copyMessage = async (msg) => {
+  const text = msg.answer || msg.content || ''
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('已复制到剪贴板')
+  } catch {
+    alert('复制失败，请检查浏览器权限。')
+  }
+}
+
+const regenerateReply = async (idx) => {
+  if (isLoading.value) return
+  const msg = messages.value[idx]
+  if (!msg || msg.role !== 'assistant') return
+
+  let previousUserText = ''
+  for (let i = idx - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') {
+      previousUserText = messages.value[i].content || ''
+      break
+    }
+  }
+  if (!previousUserText) {
+    alert('未找到该回答对应的用户提问，无法重新生成。')
+    return
+  }
+
+  isLoading.value = true
+  try {
+    const res = await API.post('/chat/', {
+      query: buildEnrichedQuery(previousUserText),
+      mode: isWeightLossMode.value ? 'weight_loss' : 'standard',
+      user_id: userId.value,
+      session_id: userId.value ? `session_${userId.value}` : 'guest_session'
+    })
+    const { thinking, answer } = parseAIResponse(res.data.response)
+    const today = new Date().toISOString().split('T')[0]
+    msg.content = res.data.response
+    msg.thinking = thinking
+    msg.answer = answer
+    msg.thinkingCollapsed = true
+    msg.feedback = null
+    msg.showReasons = false
+    msg.feedbackSubmitted = false
+    msg.exported = false
+    msg.exportDate = today
+    msg.feedbackRecipes = []
+    msg.selectedRecipes = []
+    msg.feedbackReasonType = 'dish'
+    msg.selectedIngredient = ''
+    msg.customReason = ''
+    msg.detectedRecipeNames = extractRecipeNames(answer || msg.content || '')
+  } catch (e) {
+    alert('重新生成失败，请稍后重试。')
+  } finally {
+    isLoading.value = false
+    scrollBottom()
+  }
 }
 
 onMounted(() => {
@@ -418,20 +786,22 @@ onMounted(() => {
 .si-del:hover { color: #e74c3c; }
 
 /* === 右侧对话框 === */
-.chat-main { flex: 1; display: flex; flex-direction: column; background: #f7f5fd; overflow: hidden; height: 100%; }
+.chat-main { flex: 1; display: flex; flex-direction: column; background: #fff; overflow: hidden; height: 100%; }
 
-.chat-messages { flex: 1; overflow-y: auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 16px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 32px 34px 16px; display: flex; flex-direction: column; gap: 18px; }
 
-.msg-row { display: flex; align-items: flex-start; max-width: 80%; gap: 10px; }
+.msg-row { display: flex; align-items: flex-start; max-width: 920px; width: 100%; gap: 10px; }
 .msg-row.is-user { align-self: flex-end; flex-direction: row-reverse; }
+
+.msg-row.is-ai { align-self: flex-start; }
 
 .msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
 .is-user .msg-avatar { background: linear-gradient(135deg, #8ac3f9, #7761e5); }
 .is-ai .msg-avatar { background: linear-gradient(135deg, #f6c342, #4aa458); color: #fff; }
 
-.msg-body { background: #fff; padding: 14px 18px; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,.04); line-height: 1.7; color: #2d3436; word-break: break-word; font-size: 14px; }
+.msg-body { background: #fff; padding: 14px 18px; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); line-height: 1.7; color: #2d3436; word-break: break-word; font-size: 14px; }
 .is-user .msg-body { background: #ede9fc; border-top-right-radius: 4px; }
-.is-ai .msg-body { border-top-left-radius: 4px; border: 1px solid #ede9fc; }
+.is-ai .msg-body { border-top-left-radius: 4px; border: 1px solid #eef1f6; box-shadow: none; }
 
 /* 深度思考块 */
 .thinking-block { margin-bottom: 10px; border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; background: #f8f9fa; }
@@ -453,28 +823,150 @@ onMounted(() => {
 .loading-dots span:nth-child(2) { animation-delay: -.16s; }
 @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-/* 导出块 */
-.export-block { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e1e8ed; }
-.export-prompt { font-size: 13px; color: #e67e22; font-weight: 600; }
-.export-row { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
-.date-input { padding: 5px 8px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; }
-.export-btn { background: #e67e22; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.export-btn:hover { background: #d35400; }
-.export-done { font-size: 13px; color: #4aa458; font-weight: 600; }
+/* 操作栏（Gemini风格） */
+.msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f3f7;
+  opacity: .72;
+  transition: opacity .18s ease;
+}
 
-/* 反馈 */
-.feedback-row { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eaeaea; }
-.feedback-row button { background: none; border: 1px solid #dfe6e9; padding: 4px 12px; border-radius: 12px; font-size: 13px; cursor: pointer; color: #7f8c8d; transition: .2s; }
-.feedback-row button.active { background: #fdf0ed; border-color: #e74c3c; color: #c0392b; font-weight: 600; }
-.feedback-row button:hover:not(.active):not(:disabled) { background: #f8f9fa; }
-.feedback-row button:disabled { opacity: .6; cursor: not-allowed; }
+.is-ai .msg-body:hover .msg-actions { opacity: 1; }
+
+.act-btn {
+  border: 1px solid #e4eaf3;
+  background: #fbfcfe;
+  color: #4d5b66;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: .18s;
+}
+
+.act-btn:hover:not(:disabled) { background: #f7f9fc; border-color: #cfd8e6; }
+.act-btn.active { background: #eef3ff; border-color: #b9cbf7; color: #3f63c9; }
+.act-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .reason-panel { margin-top: 10px; background: #f9fbfc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e1e8ed; }
 .reason-panel p { font-size: 12px; color: #2d3436; font-weight: 600; margin: 0 0 8px; }
+.reason-block { margin-top: 8px; }
+.reason-label { font-size: 12px; color: #636e72; margin-bottom: 6px; font-weight: 600; }
 .reason-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .r-tag { background: #fff; border: 1px solid #dfe6e9; color: #7f8c8d; font-size: 12px; padding: 4px 10px; border-radius: 14px; cursor: pointer; transition: .2s; }
 .r-tag:hover { border-color: #e74c3c; color: #e74c3c; background: #fdf0ed; }
+.r-tag.active { border-color: #7761e5; color: #7761e5; background: #ede9fc; }
+.reason-input, .reason-textarea {
+  width: 100%; border: 1px solid #dfe6e9; border-radius: 8px; padding: 8px 10px;
+  font-size: 12px; outline: none; background: #fff;
+}
+.reason-input:focus, .reason-textarea:focus { border-color: #7761e5; }
+.reason-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }
+.reason-cancel, .reason-submit {
+  border: 1px solid #dfe6e9; background: #fff; border-radius: 8px; padding: 6px 12px;
+  font-size: 12px; cursor: pointer;
+}
+.reason-submit { background: #7761e5; border-color: #7761e5; color: #fff; }
 .fb-thanks { margin-top: 8px; font-size: 12px; color: #4aa458; font-weight: 600; }
+
+.export-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+}
+
+.export-modal {
+  width: 360px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e9edf3;
+  box-shadow: 0 20px 50px rgba(0,0,0,.16);
+  padding: 18px;
+}
+
+.export-modal h4 { margin: 0 0 6px; font-size: 18px; color: #2d3436; }
+.export-modal p { margin: 0 0 12px; color: #7c8a96; font-size: 13px; }
+
+.export-preview {
+  border: 1px solid #edf1f6;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fbfcfe;
+}
+
+.export-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #60707d;
+  font-weight: 600;
+}
+
+.preview-toggle {
+  border: 1px solid #dfe7f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #60707d;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.export-preview-list {
+  max-height: 140px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.export-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #35424b;
+}
+
+.export-date-input {
+  width: 100%;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.export-date-input:focus { border-color: #7761e5; }
+
+.export-modal-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+.em-cancel, .em-confirm { border-radius: 8px; border: 1px solid #dfe6ef; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.em-confirm { background: #7761e5; color: #fff; border-color: #7761e5; }
+.em-confirm:disabled { opacity: .5; cursor: not-allowed; }
+
+.chat-toast {
+  position: fixed;
+  right: 26px;
+  bottom: 24px;
+  z-index: 1500;
+  background: rgba(45, 52, 54, .92);
+  color: #fff;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
 
 .chat-input-area { display: flex; padding: 16px 24px; background: #fff; border-top: 1px solid #f0f2f5; gap: 12px; }
 .chat-input-area input { flex: 1; padding: 14px 18px; border: 1px solid #dfe6e9; border-radius: 12px; font-size: 14px; outline: none; background: #f8f9fa; transition: .2s; }

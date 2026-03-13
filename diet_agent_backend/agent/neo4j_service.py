@@ -1,6 +1,7 @@
 # agent/neo4j_service.py
 import os
 from neo4j import GraphDatabase
+from neo4j.exceptions import ServiceUnavailable, ConfigurationError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,13 +9,40 @@ load_dotenv()
 class Neo4jService:
     _instance = None
 
+    @staticmethod
+    def _normalize_bolt_uri(uri: str) -> str:
+        """将 neo4j 路由 URI 降级为 bolt 直连 URI，适配单机 Neo4j。"""
+        if uri.startswith("neo4j://"):
+            return "bolt://" + uri[len("neo4j://"):]
+        if uri.startswith("neo4j+s://"):
+            return "bolt+s://" + uri[len("neo4j+s://"):]
+        if uri.startswith("neo4j+ssc://"):
+            return "bolt+ssc://" + uri[len("neo4j+ssc://"):]
+        return uri
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Neo4jService, cls).__new__(cls)
             uri = os.getenv("NEO4J_URI")
             user = os.getenv("NEO4J_USER")
             password = os.getenv("NEO4J_PASSWORD")
-            cls._instance.driver = GraphDatabase.driver(uri, auth=(user, password))
+
+            if not uri:
+                raise ConfigurationError("NEO4J_URI 未配置，请检查 .env")
+
+            # 先按原 URI 连接；若路由信息不可获取（常见于单机实例），自动降级为 bolt 直连。
+            try:
+                driver = GraphDatabase.driver(uri, auth=(user, password))
+                driver.verify_connectivity()
+            except ServiceUnavailable as e:
+                if "routing information" not in str(e).lower():
+                    raise
+                fallback_uri = cls._normalize_bolt_uri(uri)
+                print(f"Neo4j 路由连接失败，自动降级为直连: {fallback_uri}")
+                driver = GraphDatabase.driver(fallback_uri, auth=(user, password))
+                driver.verify_connectivity()
+
+            cls._instance.driver = driver
         return cls._instance
 
     def close(self):

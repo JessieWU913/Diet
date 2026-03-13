@@ -29,9 +29,10 @@
         <div class="fc-ingredients" v-if="item.parsedIngredients && item.parsedIngredients.length > 0">
           <h4>食材清单</h4>
           <div v-for="(ing, iIdx) in item.parsedIngredients" :key="iIdx" class="ing-row">
-            <span class="ing-name">{{ ing.display }}</span>
-            <button class="ing-replace-btn" @click="findSimilar(item, iIdx, ing.name)">替换</button>
-            <button class="ing-conflict-btn" @click="checkConflict(item, iIdx, ing.name)">同食禁忌</button>
+            <span class="ing-name">{{ ing.name }}</span>
+            <span v-if="ing.amount" class="ing-amount">{{ ing.amount }}</span>
+            <button class="ing-replace-btn" @click="findSimilar(item, iIdx, ing.lookupName)">替换</button>
+            <button class="ing-conflict-btn" @click="checkConflict(item, iIdx, ing.lookupName)">同食禁忌</button>
 
             <div v-if="ing.showSimilar" class="similar-panel">
               <div v-if="ing.similarLoading" class="sp-loading">搜索中...</div>
@@ -50,6 +51,9 @@
             </div>
           </div>
         </div>
+        <div class="fc-ingredients-empty" v-else>
+          食材补全中或暂无食材信息
+        </div>
       </div>
     </div>
 
@@ -66,8 +70,8 @@
             <span>{{ detailRecipe.fat || '—' }}g 脂肪</span>
             <span>{{ detailRecipe.carbs || '—' }}g 碳水</span>
           </div>
-          <div v-if="detailLoading" class="dm-loading">加载中...</div>
-          <div v-else>
+          <div v-if="detailLoading" class="dm-loading">AI 正在补全做法...</div>
+          <div>
             <div v-if="detailData && detailData.ingredients" class="dm-section">
               <h4>食材清单</h4>
               <div class="ing-tags" v-html="formatIngredients(detailData.ingredients)"></div>
@@ -132,6 +136,34 @@ const detailRecipe = ref({})
 const detailData = ref(null)
 const detailLoading = ref(false)
 
+const isBlank = (v) => v === undefined || v === null || String(v).trim() === '' || String(v).trim() === '[]'
+
+const normalizeIngredientName = (name) => {
+  const raw = String(name || '').trim()
+  if (!raw) return ''
+  const noParen = raw
+    .replace(/（[^）]*）/g, '')
+    .replace(/\([^)]*\)/g, '')
+    .trim()
+  return (noParen || raw).replace(/[\s·•]+/g, '').trim()
+}
+
+const splitIngredientText = (text) => {
+  const raw = String(text || '').trim()
+  if (!raw) return { name: '', amount: '' }
+
+  const amountRegex = /(\d+(?:\.\d+)?\s*(?:g|克|kg|千克|ml|毫升|L|升|斤|两|个|只|根|片|块|勺|杯)|适量|少许|一些)$/i
+  const matched = raw.match(amountRegex)
+
+  if (!matched) {
+    return { name: raw, amount: '' }
+  }
+
+  const amount = matched[1].trim()
+  const name = raw.slice(0, raw.length - matched[0].length).trim().replace(/[：:，,、\-]+$/, '').trim()
+  return { name: name || raw, amount }
+}
+
 // 解析食材字符串为数组
 const parseIngredients = (raw) => {
   if (!raw) return []
@@ -140,10 +172,13 @@ const parseIngredients = (raw) => {
     if (!Array.isArray(arr)) return []
     return arr.map(i => {
       const text = i.raw_text || (typeof i === 'string' ? i : JSON.stringify(i))
-      const name = text.replace(/[\d.]+\s*(g|克|ml|毫升|斤|两|个|只|根|片|块|勺|杯|适量|少许|一些)/g, '').trim() || text
+      const split = splitIngredientText(text)
+      const name = split.name || text
       return {
         display: text,
         name,
+        amount: split.amount,
+        lookupName: normalizeIngredientName(name),
         showSimilar: false,
         similars: [],
         similarLoading: false,
@@ -153,16 +188,23 @@ const parseIngredients = (raw) => {
       }
     })
   } catch {
-    return raw.split(/[,，、\n]/).filter(Boolean).map(t => ({
-      display: t.trim(),
-      name: t.trim(),
-      showSimilar: false,
-      similars: [],
-      similarLoading: false,
-      showConflict: false,
-      conflicts: [],
-      conflictLoading: false
-    }))
+    return raw.split(/[,，、\n]/).filter(Boolean).map(t => {
+      const text = t.trim()
+      const split = splitIngredientText(text)
+      const name = split.name || text
+      return {
+        display: text,
+        name,
+        amount: split.amount,
+        lookupName: normalizeIngredientName(name),
+        showSimilar: false,
+        similars: [],
+        similarLoading: false,
+        showConflict: false,
+        conflicts: [],
+        conflictLoading: false
+      }
+    })
   }
 }
 
@@ -172,14 +214,79 @@ const loadCollections = async () => {
   try {
     const res = await API.get(`/collection/?user_id=${userId}`)
     const items = res.data.collections || []
-    collections.value = items.map(c => ({
+    const merged = items.map(c => ({
       ...c,
       parsedIngredients: parseIngredients(c.ingredients)
     }))
+    collections.value = merged
+    await enrichCollections(merged)
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
+  }
+}
+
+const enrichCollections = async (items) => {
+  const needLookup = items
+    .filter(i => isBlank(i.ingredients) || isBlank(i.steps))
+    .map(i => i.recipe_name)
+
+  if (needLookup.length === 0) return
+
+  try {
+    const res = await API.post('/recipe/', { names: [...new Set(needLookup)] })
+    const list = res.data.data || []
+    const detailMap = {}
+    list.forEach((d) => {
+      const k1 = d.requested_name || d.name
+      const k2 = d.name
+      if (k1) detailMap[k1] = d
+      if (k2 && !detailMap[k2]) detailMap[k2] = d
+    })
+
+    const persistTasks = []
+    items.forEach((item) => {
+      const detail = detailMap[item.recipe_name]
+      if (!detail) return
+
+      const beforeIngredients = item.ingredients
+      const beforeSteps = item.steps
+
+      if (isBlank(item.ingredients) && !isBlank(detail.ingredients)) {
+        item.ingredients = detail.ingredients
+      }
+      if (isBlank(item.steps) && !isBlank(detail.steps)) {
+        item.steps = detail.steps
+      }
+      if ((!item.calories || item.calories === 0) && detail.calories) item.calories = detail.calories
+      if ((!item.protein || item.protein === 0) && detail.protein) item.protein = detail.protein
+      if ((!item.fat || item.fat === 0) && detail.fat) item.fat = detail.fat
+      if ((!item.carbs || item.carbs === 0) && detail.carbs) item.carbs = detail.carbs
+
+      item.parsedIngredients = parseIngredients(item.ingredients)
+
+      // 回写收藏，避免下次进入再次补全
+      if (beforeIngredients !== item.ingredients || beforeSteps !== item.steps) {
+        persistTasks.push(API.post('/collection/', {
+          user_id: userId,
+          recipe_name: item.recipe_name,
+          calories: item.calories || 0,
+          protein: item.protein || 0,
+          fat: item.fat || 0,
+          carbs: item.carbs || 0,
+          ingredients: item.ingredients || '',
+          steps: item.steps || ''
+        }))
+      }
+    })
+
+    if (persistTasks.length > 0) {
+      await Promise.allSettled(persistTasks)
+    }
+    collections.value = [...items]
+  } catch (e) {
+    console.error('收藏补全失败', e)
   }
 }
 
@@ -196,12 +303,26 @@ const removeCollection = async (recipeName) => {
 const viewDetail = async (item) => {
   detailRecipe.value = item
   detailData.value = null
-  detailLoading.value = true
+  detailLoading.value = isBlank(item.steps)
   showDetail.value = true
   try {
     const res = await API.post('/recipe/', { names: [item.recipe_name] })
     if (res.data.data && res.data.data.length > 0) {
       detailData.value = res.data.data[0]
+      if (isBlank(item.ingredients) && !isBlank(detailData.value.ingredients)) item.ingredients = detailData.value.ingredients
+      if (isBlank(item.steps) && !isBlank(detailData.value.steps)) item.steps = detailData.value.steps
+      item.parsedIngredients = parseIngredients(item.ingredients)
+
+      await API.post('/collection/', {
+        user_id: userId,
+        recipe_name: item.recipe_name,
+        calories: item.calories || detailData.value.calories || 0,
+        protein: item.protein || detailData.value.protein || 0,
+        fat: item.fat || detailData.value.fat || 0,
+        carbs: item.carbs || detailData.value.carbs || 0,
+        ingredients: item.ingredients || detailData.value.ingredients || '',
+        steps: item.steps || detailData.value.steps || ''
+      })
     }
   } catch (e) {
     console.error(e)
@@ -237,6 +358,7 @@ const replaceIngredient = (item, iIdx, newName) => {
   const ing = item.parsedIngredients[iIdx]
   ing.display = newName
   ing.name = newName
+  ing.lookupName = normalizeIngredientName(newName)
   ing.showSimilar = false
   ing.similars = []
 }
@@ -330,8 +452,10 @@ onMounted(() => loadCollections())
 
 .fc-ingredients { margin-bottom: 4px; }
 .fc-ingredients h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
+.fc-ingredients-empty { font-size: 13px; color: #8c98a4; margin-top: 6px; }
 .ing-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid #f8f9fa; }
-.ing-name { font-size: 14px; color: #2d3436; min-width: 80px; }
+.ing-name { font-size: 14px; color: #2d3436; min-width: 80px; padding: 4px 10px; border-radius: 999px; background: #f2f5f8; border: 1px solid #e2e8ef; }
+.ing-amount { font-size: 13px; color: #5f6d7a; padding: 4px 10px; border-radius: 999px; background: #fff8ea; border: 1px solid #f3dfae; }
 .ing-replace-btn, .ing-conflict-btn { padding: 3px 10px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
 .ing-replace-btn:hover { background: #ede9fc; border-color: #7761e5; color: #7761e5; }
 .ing-conflict-btn:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }

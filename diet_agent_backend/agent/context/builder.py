@@ -44,11 +44,11 @@ class ContextBuilder:
         """从各个记忆层收集原始信息"""
         fragments = {}
 
-        # 语义记忆（用户画像 + 忌口 + 负面反馈）
+        # 用户画像 + 忌口 + 负面反馈
         profile_data = SemanticMemory.get_user_profile(self.user_id)
         fragments["profile"] = profile_data or {}
 
-        # 情景记忆（近期饮食记录）
+        # 近期饮食记录
         fragments["recent_meals"] = EpisodicMemory.get_recent_meals(
             self.user_id, days_limit=3
         )
@@ -70,6 +70,10 @@ class ContextBuilder:
         # 负反馈只保留最近3条
         neg = merged_profile.get("negative_feedback", [])
         selected["negative_feedback"] = neg[-3:] if neg else []
+
+        # 正反馈只保留最近3条
+        pos = merged_profile.get("positive_feedback", [])
+        selected["positive_feedback"] = pos[-3:] if pos else []
 
         # 情景记忆：减脂模式下保留3天，普通模式2天
         meals = fragments["recent_meals"]
@@ -101,6 +105,14 @@ class ContextBuilder:
             memory_lines.append("\n【长期记忆 - 历史教训】：")
             memory_lines.append("该用户曾对你的推荐给出过负面反馈，必须主动避开以下雷区：")
             for item in neg:
+                memory_lines.append(f"  * {item}")
+
+        # 正向反馈
+        pos = selected.get("positive_feedback", [])
+        if pos:
+            memory_lines.append("\n【长期记忆 - 成功经验】：")
+            memory_lines.append("该用户曾对以下回答风格或推荐方式表示满意，本轮可优先复用：")
+            for item in pos:
                 memory_lines.append(f"  * {item}")
 
         # 近期饮食

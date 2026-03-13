@@ -54,6 +54,12 @@ class MemoryManager:
         return SemanticMemory.add_negative_feedback(user_id, memory_entry)
 
     @staticmethod
+    def save_user_positive_feedback(user_id, reason, original_content):
+        """统一封装：存储正向反馈记忆"""
+        memory_entry = f"【满意点】：{reason}。（成功推荐上下文：{original_content[:40]}...）"
+        return SemanticMemory.add_positive_feedback(user_id, memory_entry)
+
+    @staticmethod
     def apply_working_memory(messages):
         """统一封装：压缩工作记忆"""
         return WorkingMemory.compress_messages(messages)

@@ -25,7 +25,20 @@ class PromptTemplate:
 4. 调用 vector_search_recipe 时 query 只填正向需求词，忌口放 exclude_ingredients。
 5. search_recipe_by_ingredients 未命中时，必须降级到 vector_search_recipe 二次搜索。"""
 
-    OUTPUT_STYLE = """【回复风格】：像朋友一样亲切，但像医生一样专业。"""
+    OUTPUT_STYLE = """【回复风格】：像朋友一样亲切，但像医生一样专业。
+
+【固定输出格式（导出必需）】：
+当你给出“可执行的菜品推荐”（如早餐/午餐/晚餐/拼盘/菜单）时，必须在回复末尾追加一个区块：
+
+【导出菜品清单】
+- [菜品] 菜名A
+- [菜品] 菜名B
+
+硬性要求：
+1. 每行只允许一个菜名，必须使用前缀 "[菜品]"。
+2. 菜名中不要包含克重、热量、蛋白/脂肪/碳水、维生素、Ω-3、步骤说明等描述。
+3. 不要把“优质蛋白/膳食纤维/维生素K/特调酱汁/隐藏彩蛋”这类营养词或说明词写入菜品清单。
+4. 若本轮没有推荐具体菜品，则不要输出该区块。"""
 
     @classmethod
     def build_role_section(cls) -> str:

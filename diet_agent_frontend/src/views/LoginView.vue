@@ -27,24 +27,34 @@
 
         <div class="form-group">
           <label>密码</label>
-          <input
-            type="password"
-            v-model="password"
-            placeholder="请输入密码"
-            required
-            class="form-control"
-          />
+          <div class="password-wrap">
+            <input
+              :type="showPassword ? 'text' : 'password'"
+              v-model="password"
+              placeholder="请输入密码"
+              required
+              class="form-control"
+            />
+            <button type="button" class="eye-btn" @click="showPassword = !showPassword">
+              {{ showPassword ? '🙈' : '👁' }}
+            </button>
+          </div>
         </div>
 
         <div v-if="!isLoginMode" class="form-group">
           <label>确认密码</label>
-          <input
-            type="password"
-            v-model="confirmPassword"
-            placeholder="请再次输入密码"
-            required
-            class="form-control"
-          />
+          <div class="password-wrap">
+            <input
+              :type="showConfirmPassword ? 'text' : 'password'"
+              v-model="confirmPassword"
+              placeholder="请再次输入密码"
+              required
+              class="form-control"
+            />
+            <button type="button" class="eye-btn" @click="showConfirmPassword = !showConfirmPassword">
+              {{ showConfirmPassword ? '🙈' : '👁' }}
+            </button>
+          </div>
         </div>
 
         <button type="submit" class="submit-btn" :disabled="loading">
@@ -75,6 +85,8 @@ const password = ref('')
 const confirmPassword = ref('')
 const userName = ref('')
 const loading = ref(false)
+const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value
@@ -82,6 +94,8 @@ const toggleMode = () => {
   password.value = ''
   confirmPassword.value = ''
   userName.value = ''
+  showPassword.value = false
+  showConfirmPassword.value = false
 }
 
 const handleSubmit = async () => {
@@ -145,6 +159,13 @@ const handleSubmit = async () => {
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #34495e; font-size: 14px; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; }
 .form-control:focus { border-color: #7761e5; }
+.password-wrap { position: relative; }
+.password-wrap .form-control { padding-right: 42px; }
+.eye-btn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: none; background: transparent; cursor: pointer; font-size: 16px; line-height: 1;
+  color: #6c7a89; padding: 2px 4px;
+}
 .submit-btn { width: 100%; background: #7761e5; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
 .submit-btn:hover:not(:disabled) { background: #6350d0; }
 .submit-btn:disabled { background: #95a5a6; cursor: not-allowed; }
