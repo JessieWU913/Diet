@@ -54,6 +54,16 @@
         <button class="ui-btn ghost danger" :disabled="importing || !importFile" @click="cancelUpload">取消上传</button>
       </div>
 
+      <div class="progress-wrap" v-if="importing || importProgress > 0">
+        <div class="progress-head">
+          <span>{{ importStageText }}</span>
+          <span>{{ importProgress }}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: `${importProgress}%` }"></div>
+        </div>
+      </div>
+
       <div class="path-box" v-if="displayImportPath">
         <div class="path-label">当前用于导入的路径</div>
         <div class="path-value">{{ displayImportPath }}</div>
@@ -183,6 +193,8 @@ const absolutePath = ref('')
 const fileInputRef = ref(null)
 const activeTab = computed(() => (route.name === 'AdminUpdate' ? 'update' : 'overview'))
 const displayImportPath = computed(() => absolutePath.value)
+const importProgress = ref(0)
+const importStageText = ref('')
 
 const activeUser = computed(() => users.value.find((u) => u.user_id === activeUserId.value) || null)
 
@@ -235,32 +247,59 @@ const submitImport = async () => {
   }
 
   importing.value = true
+  importProgress.value = 5
+  importStageText.value = '准备导入任务...'
   errorText.value = ''
   importResult.value = null
   try {
     const fd = new FormData()
     fd.append('import_type', importType.value)
-    if (absolutePath.value) {
+    const usePathMode = !!absolutePath.value
+    if (usePathMode) {
       fd.append('file_path', absolutePath.value)
-    }
-    if (importFile.value) {
+      importProgress.value = 20
+      importStageText.value = '服务器按绝对路径读取文件...'
+    } else if (importFile.value) {
       fd.append('file', importFile.value)
+      importProgress.value = 10
+      importStageText.value = '上传文件到服务器...'
     }
+
     const res = await API.post('/admin/import-json/', fd, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      onUploadProgress: (evt) => {
+        if (!importing.value || usePathMode) return
+        const total = evt.total || 0
+        if (total <= 0) return
+        const ratio = Math.min(1, evt.loaded / total)
+        const p = Math.round(10 + ratio * 55)
+        importProgress.value = Math.max(importProgress.value, p)
+        importStageText.value = '上传中...'
+      },
     })
+    importProgress.value = Math.max(importProgress.value, 85)
+    importStageText.value = '服务器处理中...'
     importResult.value = res.data
     if (res?.data?.file_path) {
       absolutePath.value = res.data.file_path
     }
+    importProgress.value = 100
+    importStageText.value = '导入完成'
     await loadOverview()
   } catch (e) {
     errorText.value = e?.response?.data?.error || '导入失败'
+    importStageText.value = '导入失败'
   } finally {
     importing.value = false
+    if (importProgress.value >= 100) {
+      setTimeout(() => {
+        importProgress.value = 0
+        importStageText.value = ''
+      }, 1200)
+    }
   }
 }
 
@@ -399,6 +438,40 @@ onMounted(() => {
   color: #60707d;
   font-size: 15px;
   font-weight: 600;
+}
+
+.progress-wrap {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid #d7e5ee;
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 10px 12px;
+}
+
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #375164;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e6eff5;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2c8b74 0%, #1f6e93 100%);
+  transition: width .2s ease;
 }
 
 .path-box {
