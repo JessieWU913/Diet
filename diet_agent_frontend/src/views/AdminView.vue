@@ -329,6 +329,8 @@ onMounted(() => {
 .ui-btn.ghost.danger {
   color: #8b2e2e;
   border-color: #e5c2c2;
+  min-width: 124px;
+  white-space: nowrap;
 }
 
 .ui-btn:disabled { opacity: .65; cursor: not-allowed; }
@@ -387,7 +389,7 @@ onMounted(() => {
 }
 
 .import-actions .ui-btn.accent {
-  width: 100%;
+  flex: 1;
   padding: 13px 16px;
   border-radius: 14px;
   font-size: 17px;
