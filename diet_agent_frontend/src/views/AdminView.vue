@@ -29,12 +29,12 @@
       </div>
 
       <div class="import-form-row full-width">
-        <label class="import-label">真实文件路径（优先使用）</label>
+        <label class="import-label">真实文件绝对路径（自动回填，可手动修正）</label>
         <input
           v-model.trim="absolutePath"
           class="path-input"
           :disabled="importing"
-          placeholder="例如：/Users/wujieqian/Desktop/毕业设计/final_data_bohee/recipes_final.json"
+          placeholder="例如：/xxx/xxx/xxx.json"
         />
       </div>
 
@@ -48,14 +48,15 @@
       </div>
 
       <div class="import-actions">
-        <button class="ui-btn accent" :disabled="importing || !absolutePath" @click="submitImport">
+        <button class="ui-btn accent" :disabled="importing || (!absolutePath && !importFile)" @click="submitImport">
           {{ importing ? '导入中...' : '开始导入' }}
         </button>
+        <button class="ui-btn ghost danger" :disabled="importing || !importFile" @click="cancelUpload">取消上传</button>
       </div>
 
-      <div class="path-box" v-if="absolutePath">
+      <div class="path-box" v-if="displayImportPath">
         <div class="path-label">当前用于导入的路径</div>
-        <div class="path-value">{{ absolutePath }}</div>
+        <div class="path-value">{{ displayImportPath }}</div>
       </div>
 
       <div v-if="importResult" class="import-result">
@@ -178,10 +179,10 @@ const importType = ref('ingredient')
 const importFile = ref(null)
 const importing = ref(false)
 const importResult = ref(null)
-const selectedPath = ref('')
 const absolutePath = ref('')
 const fileInputRef = ref(null)
 const activeTab = computed(() => (route.name === 'AdminUpdate' ? 'update' : 'overview'))
+const displayImportPath = computed(() => absolutePath.value)
 
 const activeUser = computed(() => users.value.find((u) => u.user_id === activeUserId.value) || null)
 
@@ -202,11 +203,24 @@ const selectUser = (u) => {
 const onFileChange = (e) => {
   const f = e?.target?.files?.[0]
   importFile.value = f || null
-  selectedPath.value = ''
+  if (!f) return
+
+  // In desktop-like runtimes (e.g., Electron), File.path may contain absolute path.
+  const candidate = String(f.path || '').trim()
+  const isAbs = candidate.startsWith('/') || /^[A-Za-z]:[\\/]/.test(candidate)
+  const isFake = candidate.toLowerCase().includes('fakepath')
+  if (isAbs && !isFake) {
+    absolutePath.value = candidate
+  }
 }
 
 const openFilePicker = () => {
   if (fileInputRef.value) fileInputRef.value.click()
+}
+
+const cancelUpload = () => {
+  importFile.value = null
+  if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
 const submitImport = async () => {
@@ -215,8 +229,8 @@ const submitImport = async () => {
     errorText.value = '管理员登录已失效，请重新登录'
     return
   }
-  if (!absolutePath.value) {
-    errorText.value = '请先填写真实 JSON 绝对路径'
+  if (!absolutePath.value && !importFile.value) {
+    errorText.value = '请先选择 JSON 文件或填写真实路径'
     return
   }
 
@@ -226,7 +240,9 @@ const submitImport = async () => {
   try {
     const fd = new FormData()
     fd.append('import_type', importType.value)
-    fd.append('file_path', absolutePath.value)
+    if (absolutePath.value) {
+      fd.append('file_path', absolutePath.value)
+    }
     if (importFile.value) {
       fd.append('file', importFile.value)
     }
@@ -237,7 +253,9 @@ const submitImport = async () => {
       }
     })
     importResult.value = res.data
-    selectedPath.value = res?.data?.file_path || absolutePath.value || importFile.value?.name || ''
+    if (res?.data?.file_path) {
+      absolutePath.value = res.data.file_path
+    }
     await loadOverview()
   } catch (e) {
     errorText.value = e?.response?.data?.error || '导入失败'
@@ -306,6 +324,11 @@ onMounted(() => {
   background: #fff;
   color: #1f5468;
   border: 1px solid #c9dbe6;
+}
+
+.ui-btn.ghost.danger {
+  color: #8b2e2e;
+  border-color: #e5c2c2;
 }
 
 .ui-btn:disabled { opacity: .65; cursor: not-allowed; }
