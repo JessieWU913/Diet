@@ -160,7 +160,14 @@ import API from '../api.js'
 import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
 const userId = localStorage.getItem('user_id') || ''
-const selectedDate = ref(new Date().toISOString().split('T')[0])
+const getLocalDateString = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const selectedDate = ref(getLocalDateString())
 const searchQuery = ref('')
 const searchResults = ref([])
 const addMealType = ref('lunch')
@@ -334,7 +341,10 @@ const dailyTotals = computed(() => {
 const changeDate = (offset) => {
   const d = new Date(selectedDate.value)
   d.setDate(d.getDate() + offset)
-  selectedDate.value = d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  selectedDate.value = `${y}-${m}-${day}`
 }
 
 watch(selectedDate, () => loadLogs())

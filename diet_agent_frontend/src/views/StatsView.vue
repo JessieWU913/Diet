@@ -153,7 +153,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 import API from '../api.js'
 
 const userId = localStorage.getItem('user_id') || ''
-const selectedDate = ref(new Date().toISOString().split('T')[0])
+const getLocalDateString = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const selectedDate = ref(getLocalDateString())
 
 const profile = ref({
   gender: 'female',

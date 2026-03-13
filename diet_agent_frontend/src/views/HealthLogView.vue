@@ -88,6 +88,13 @@ const currentMonth = computed(() => {
 const prevMonth = () => { monthOffset.value--; loadData() }
 const nextMonth = () => { monthOffset.value++; loadData() }
 
+const toLocalDateString = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 const loadData = async () => {
   loading.value = true
   try {
@@ -95,8 +102,8 @@ const loadData = async () => {
     d.setMonth(d.getMonth() + monthOffset.value)
     const year = d.getFullYear()
     const month = d.getMonth()
-    const startDate = new Date(year, month, 1).toISOString().split('T')[0]
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]
+    const startDate = toLocalDateString(new Date(year, month, 1))
+    const endDate = toLocalDateString(new Date(year, month + 1, 0))
 
     const [dietRes, eventRes] = await Promise.all([
       API.get(`/diet-log/?user_id=${userId}&start_date=${startDate}&end_date=${endDate}`),

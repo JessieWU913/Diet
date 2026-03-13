@@ -87,6 +87,7 @@
               <span v-if="r.carbs">碳水 {{ r.carbs }}g</span>
             </div>
             <div class="ec-actions">
+              <button class="ec-log" @click="openRecordMealModal(r)">记录饮食</button>
               <button class="ec-detail" @click="viewDetail(r)">查看做法</button>
               <button class="ec-fav" @click="addToCollection(r)">收藏</button>
               <button class="ec-del" @click="deleteExportedMeal(date, r.id)">删除</button>
@@ -125,6 +126,25 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showRecordMealModal" class="modal-overlay" @click.self="showRecordMealModal = false">
+      <div class="record-modal">
+        <div class="rm-header">
+          <h3>记录饮食</h3>
+          <button class="close-btn" @click="showRecordMealModal = false">×</button>
+        </div>
+        <div class="rm-body">
+          <p class="rm-name">{{ pendingRecordRecipe?.name }}</p>
+          <label>选择餐次</label>
+          <select v-model="pendingMealType">
+            <option value="breakfast">早餐</option>
+            <option value="lunch">午餐</option>
+            <option value="dinner">晚餐</option>
+          </select>
+          <button class="rm-save" @click="confirmRecordMeal">确认记录</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -140,6 +160,9 @@ const recommendations = ref({ breakfast: [], lunch: [], dinner: [] })
 const showDetail = ref(false)
 const detailRecipe = ref({})
 const detailData = ref(null)
+const showRecordMealModal = ref(false)
+const pendingRecordRecipe = ref(null)
+const pendingMealType = ref('lunch')
 
 const filters = reactive({ maxCalories: 700, minProtein: 0, maxFat: 50 })
 
@@ -148,6 +171,14 @@ const mealSections = [
   { key: 'lunch', label: '午餐', icon: Soup },
   { key: 'dinner', label: '晚餐', icon: MoonStar },
 ]
+
+const getLocalDateString = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 // 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
 const exportedMeals = ref({})
@@ -230,10 +261,11 @@ const resetFilters = () => {
 }
 
 const addToDietLog = async (recipe, mealType) => {
+  if (!userId) { alert('请先登录！'); return }
   try {
     await API.post('/diet-log/', {
       user_id: userId,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       meal_type: mealType,
       food_name: recipe.name,
       calories: recipe.calories || 0,
@@ -244,6 +276,20 @@ const addToDietLog = async (recipe, mealType) => {
     })
     alert(`已将「${recipe.name}」记入今日${mealType === 'breakfast' ? '早餐' : mealType === 'lunch' ? '午餐' : '晚餐'}`)
   } catch (e) { alert('记录失败') }
+}
+
+const openRecordMealModal = (recipe) => {
+  pendingRecordRecipe.value = recipe
+  pendingMealType.value = 'lunch'
+  showRecordMealModal.value = true
+}
+
+const confirmRecordMeal = async () => {
+  const recipe = pendingRecordRecipe.value
+  if (!recipe) return
+  await addToDietLog(recipe, pendingMealType.value)
+  showRecordMealModal.value = false
+  pendingRecordRecipe.value = null
 }
 
 const viewDetail = async (recipe) => {
@@ -422,6 +468,8 @@ onMounted(() => {
 .ec-macros { display: flex; flex-wrap: wrap; gap: 4px; }
 .ec-macros span { font-size: 11px; padding: 3px 8px; background: #f8f9fa; border-radius: 8px; color: #636e72; }
 .ec-actions { display: flex; gap: 6px; margin-top: 2px; }
+.ec-log { padding: 5px 10px; border: 1px solid #7761e5; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #7761e5; transition: .2s; }
+.ec-log:hover { background: #efeaff; }
 .ec-detail { padding: 5px 10px; border: 1px solid #2196f3; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #2196f3; transition: .2s; }
 .ec-detail:hover { background: #e3f2fd; }
 .ec-fav { padding: 5px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
@@ -470,6 +518,65 @@ onMounted(() => {
   color: #9a5d00;
   font-weight: 700;
 }
+
+.record-modal {
+  background: #fff;
+  width: 360px;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.16);
+  border: 1px solid #e9edf3;
+}
+
+.rm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.rm-header h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #2d3436;
+}
+
+.rm-body {
+  padding: 16px 18px 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.rm-name {
+  margin: 0;
+  font-size: 14px;
+  color: #4e5968;
+  font-weight: 700;
+}
+
+.rm-body label {
+  font-size: 13px;
+  color: #647285;
+}
+
+.rm-body select {
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.rm-save {
+  border: 1px solid #1f2329;
+  background: #fff;
+  color: #1f2329;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rm-save:hover { background: #f5f7fa; }
 
 @media (max-width: 1100px) {
   .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }

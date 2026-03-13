@@ -420,7 +420,7 @@ const extractRecipeNames = (text) => {
     names.push(name)
   }
 
-  // A) 固定导出格式优先：- [菜品] XXX / - 【菜品】XXX
+  // 固定导出格式优先
   const fixedTagRegex = /(?:^|\n)\s*(?:[-•·●]|\d+[.、)])?\s*(?:\[菜品\]|【菜品】)\s*([^\n（(：:]{2,20})/g
   let ft
   while ((ft = fixedTagRegex.exec(safeText)) !== null) {
@@ -430,16 +430,14 @@ const extractRecipeNames = (text) => {
     return [...new Set(names)]
   }
 
-  // 0) 结构化文本优先提取：
-  // 例如："1️⃣ **主菜：香煎鸡胸肉（120g）**" -> 提取 "香煎鸡胸肉"
+  // 结构化文本优先提取：
   const sectionDishRegex = /\d+[️⃣]?\s*\*{0,2}\s*(?:主菜|碳水|汤品|甜品|饮品)\s*[：:]\s*([^\n（(\*]{2,20})/g
   let sd
   while ((sd = sectionDishRegex.exec(safeText)) !== null) {
     pushName(sd[1])
   }
 
-  // 0.5) 食材条目提取：
-  // 例如："- 西兰花（50g，蒸）：18卡"、"- 牛油果30g（48卡）"
+  // 食材条目提取：
   const ingredientLineRegex = /(?:^|\n)\s*[-•·●]\s*([^\n：:（(]{2,20}?)(?:（|\d+\s*(?:g|克|颗|个))/g
   let il
   while ((il = ingredientLineRegex.exec(safeText)) !== null) {
@@ -815,7 +813,6 @@ onMounted(() => {
 .is-user .msg-body { background: #ede9fc; border-top-right-radius: 4px; }
 .is-ai .msg-body { border-top-left-radius: 4px; border: 1px solid #eef1f6; box-shadow: none; }
 
-/* 深度思考块 */
 .thinking-block { margin-bottom: 10px; border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; background: #f8f9fa; }
 .thinking-toggle { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; cursor: pointer; user-select: none; }
 .thinking-toggle:hover { background: #f0f2f5; }
@@ -823,7 +820,6 @@ onMounted(() => {
 .tk-chevron { font-size: 11px; color: #adb5bd; }
 .thinking-content { padding: 8px 12px 10px; font-size: 12px; color: #adb5bd; line-height: 1.65; font-style: italic; white-space: pre-wrap; border-top: 1px solid #e9ecef; max-height: 200px; overflow-y: auto; }
 
-/* Markdown 穿透 */
 .msg-content :deep(p) { margin: 0 0 8px; }
 .msg-content :deep(p:last-child) { margin: 0; }
 .msg-content :deep(strong) { color: #2d3436; }

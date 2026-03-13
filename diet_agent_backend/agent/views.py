@@ -1953,6 +1953,66 @@ class DietLogView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
+    def get(self, request):
+        user_id = request.query_params.get("user_id")
+        date_str = request.query_params.get("date")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        if not user_id:
+            return Response({"error": "缺少 user_id"}, status=400)
+
+        if start_date and end_date:
+            cypher = """
+            MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog)
+            WHERE log.date >= $start_date AND log.date <= $end_date
+            RETURN log.id AS id, log.date AS date, log.meal_type AS meal_type,
+                   log.food_name AS food_name, log.calories AS calories,
+                   log.protein AS protein, log.fat AS fat,
+                   log.carbs AS carbs, log.amount AS amount
+            ORDER BY log.date DESC, CASE log.meal_type
+                WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2
+                WHEN 'dinner' THEN 3 ELSE 4
+            END
+            """
+            params = {"user_id": user_id, "start_date": start_date, "end_date": end_date}
+        else:
+            if not date_str:
+                date_str = datetime.now().strftime("%Y-%m-%d")
+            cypher = """
+            MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog {date: $date})
+            RETURN log.id AS id, log.meal_type AS meal_type,
+                   log.food_name AS food_name, log.calories AS calories,
+                   log.protein AS protein, log.fat AS fat,
+                   log.carbs AS carbs, log.amount AS amount
+            ORDER BY CASE log.meal_type
+                WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2
+                WHEN 'dinner' THEN 3 ELSE 4
+            END
+            """
+            params = {"user_id": user_id, "date": date_str}
+
+        try:
+            results = graph_db.query(cypher, params)
+            return Response({"logs": results})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    def delete(self, request):
+        user_id = request.query_params.get("user_id")
+        log_id = request.query_params.get("log_id")
+        if not user_id or not log_id:
+            return Response({"error": "缺少参数"}, status=400)
+
+        cypher = """
+        MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog {id: $log_id})
+        DETACH DELETE log
+        """
+        try:
+            graph_db.query(cypher, {"user_id": user_id, "log_id": log_id})
+            return Response({"status": "success"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
 
 class ExerciseLogView(APIView):
     """运动消耗记录：按日期记录与统计，支持 MET 自动估算"""
@@ -2081,66 +2141,6 @@ class ExerciseLogView(APIView):
 
         cypher = """
         MATCH (u:User {id: $user_id})-[:HAS_EXERCISE_LOG]->(log:ExerciseLog {id: $log_id})
-        DETACH DELETE log
-        """
-        try:
-            graph_db.query(cypher, {"user_id": user_id, "log_id": log_id})
-            return Response({"status": "success"})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-    def get(self, request):
-        user_id = request.query_params.get("user_id")
-        date_str = request.query_params.get("date")
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-        if not user_id:
-            return Response({"error": "缺少 user_id"}, status=400)
-
-        if start_date and end_date:
-            cypher = """
-            MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog)
-            WHERE log.date >= $start_date AND log.date <= $end_date
-            RETURN log.id AS id, log.date AS date, log.meal_type AS meal_type,
-                   log.food_name AS food_name, log.calories AS calories,
-                   log.protein AS protein, log.fat AS fat,
-                   log.carbs AS carbs, log.amount AS amount
-            ORDER BY log.date DESC, CASE log.meal_type
-                WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2
-                WHEN 'dinner' THEN 3 ELSE 4
-            END
-            """
-            params = {"user_id": user_id, "start_date": start_date, "end_date": end_date}
-        else:
-            if not date_str:
-                date_str = datetime.now().strftime("%Y-%m-%d")
-            cypher = """
-            MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog {date: $date})
-            RETURN log.id AS id, log.meal_type AS meal_type,
-                   log.food_name AS food_name, log.calories AS calories,
-                   log.protein AS protein, log.fat AS fat,
-                   log.carbs AS carbs, log.amount AS amount
-            ORDER BY CASE log.meal_type
-                WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2
-                WHEN 'dinner' THEN 3 ELSE 4
-            END
-            """
-            params = {"user_id": user_id, "date": date_str}
-
-        try:
-            results = graph_db.query(cypher, params)
-            return Response({"logs": results})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-    def delete(self, request):
-        user_id = request.query_params.get("user_id")
-        log_id = request.query_params.get("log_id")
-        if not user_id or not log_id:
-            return Response({"error": "缺少参数"}, status=400)
-
-        cypher = """
-        MATCH (u:User {id: $user_id})-[:HAS_LOG]->(log:DietLog {id: $log_id})
         DETACH DELETE log
         """
         try:
