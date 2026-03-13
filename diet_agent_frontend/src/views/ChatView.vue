@@ -67,7 +67,7 @@
                 <ThumbsDown class="icon-lucide" :size="16" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn icon-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复" aria-label="重新生成">
-                <RotateCcw class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
+                <RotateCw class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
               </button>
               <button class="act-btn icon-btn" @click="copyMessage(msg)" title="复制这条回复" aria-label="复制">
                 <Copy class="icon-lucide" :size="18" :stroke-width="1.9" aria-hidden="true" />
@@ -175,7 +175,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
-import { ThumbsUp, ThumbsDown, RotateCcw, Copy, Upload } from 'lucide-vue-next'
+import { ThumbsUp, ThumbsDown, RotateCw, Copy, Upload } from 'lucide-vue-next'
 import API from '../api.js'
 
 const userId = ref(localStorage.getItem('user_id') || '')
@@ -862,8 +862,6 @@ onMounted(() => {
 .thumb-btn {
   width: 30px;
   height: 30px;
-  border: 1.2px solid #1f2329;
-  border-radius: 999px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -871,7 +869,6 @@ onMounted(() => {
 }
 
 .thumb-btn.active {
-  border-color: #000;
   background: transparent;
 }
 
