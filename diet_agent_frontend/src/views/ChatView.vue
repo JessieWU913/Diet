@@ -859,22 +859,22 @@ onMounted(() => {
 .is-ai .msg-body:hover .msg-actions { opacity: 1; }
 
 .act-btn {
-  border: 1.25px solid #1f2329;
-  background: #fff;
+  border: none;
+  background: transparent;
   color: #1f2329;
-  border-radius: 999px;
-  padding: 6px 11px;
+  border-radius: 8px;
+  padding: 4px;
   font-size: 12px;
   cursor: pointer;
   transition: .18s;
 }
 
-.act-btn:hover:not(:disabled) { background: #f4f4f4; border-color: #15181d; }
-.act-btn.active { background: #1f2329; border-color: #1f2329; color: #fff; }
+.act-btn:hover:not(:disabled) { background: #f2f3f5; }
+.act-btn.active { background: #1f2329; color: #fff; }
 .act-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .thumb-btn {
-  width: 34px;
+  width: 30px;
   height: 30px;
   padding: 0;
   display: inline-flex;
@@ -893,7 +893,7 @@ onMounted(() => {
 }
 
 .icon-btn {
-  width: 34px;
+  width: 30px;
   height: 30px;
   padding: 0;
   position: relative;
@@ -903,9 +903,17 @@ onMounted(() => {
 }
 
 .icon-plain {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   fill: currentColor;
+}
+
+.icon-btn[aria-label="重新生成"] .icon-plain {
+  transition: transform .18s ease;
+}
+
+.icon-btn[aria-label="重新生成"]:hover .icon-plain {
+  transform: rotate(-24deg);
 }
 
 .icon-badge {

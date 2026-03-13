@@ -56,6 +56,19 @@
             <div class="macro-bar"><span :style="{ width: macroPct(dayTotals.fat, plan.fat) + '%' }"></span></div>
           </div>
         </div>
+
+        <div class="weight-entry">
+          <h4>今日体重录入</h4>
+          <div class="we-row">
+            <div class="we-input-wrap">
+              <input type="number" step="0.1" min="0" v-model.number="todayWeightInput" placeholder="输入今日体重" />
+              <span class="we-unit">kg</span>
+            </div>
+            <button class="we-save-btn" @click="saveTodayWeight" :disabled="weightSaving">
+              {{ weightSaving ? '保存中...' : '保存体重' }}
+            </button>
+          </div>
+        </div>
       </section>
 
       <section class="ring-card info">
@@ -78,11 +91,20 @@
             <select v-model="exerciseForm.exerciseType">
               <option v-for="opt in metOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
-            <input type="number" min="1" v-model.number="exerciseForm.durationMinutes" placeholder="时长(分钟)" />
+            <div class="ee-input-wrap">
+              <input type="number" min="1" v-model.number="exerciseForm.durationMinutes" placeholder="时长" />
+              <span class="ee-unit">分钟</span>
+            </div>
           </div>
           <div class="ee-row">
-            <input type="number" min="0" step="0.1" v-model.number="exerciseForm.met" placeholder="MET（可改）" />
-            <input type="number" min="0" step="1" v-model.number="exerciseForm.manualCalories" placeholder="手动 kcal（可选）" />
+            <div class="ee-input-wrap">
+              <input type="number" min="0" step="0.1" v-model.number="exerciseForm.met" placeholder="MET" />
+              <span class="ee-unit">MET</span>
+            </div>
+            <div class="ee-input-wrap">
+              <input type="number" min="0" step="1" v-model.number="exerciseForm.manualCalories" placeholder="手动 kcal（可选）" />
+              <span class="ee-unit">kcal</span>
+            </div>
           </div>
           <div class="ee-preview">预计消耗：{{ estimatedExerciseCalories }} kcal</div>
           <button class="ee-add-btn" @click="addExerciseLog" :disabled="exerciseSaving">
@@ -116,12 +138,16 @@ const profile = ref({
   weight: 0,
   targetWeight: 0,
   fatLossWeeks: 0,
+  allergies: [],
+  dislikes: [],
 })
 
 const dayTotals = ref({ calories: 0, protein: 0, fat: 0, carbs: 0 })
 const exerciseLogs = ref([])
 const exerciseTotalCalories = ref(0)
 const exerciseSaving = ref(false)
+const todayWeightInput = ref(null)
+const weightSaving = ref(false)
 
 const metOptions = [
   { value: 'walk', label: '快走', met: 4.3 },
@@ -237,9 +263,38 @@ const loadProfile = async () => {
       weight: Number(res.data.weight || 0),
       targetWeight: Number(res.data.targetWeight || 0),
       fatLossWeeks: Number(res.data.fatLossWeeks || 0),
+      allergies: Array.isArray(res.data.allergies) ? res.data.allergies : [],
+      dislikes: Array.isArray(res.data.dislikes) ? res.data.dislikes : [],
     }
+    todayWeightInput.value = Number(res.data.weight || 0) || null
   } catch (e) {
     console.error(e)
+  }
+}
+
+const saveTodayWeight = async () => {
+  if (!userId) return
+  const w = Number(todayWeightInput.value || 0)
+  if (w <= 0) return
+
+  weightSaving.value = true
+  try {
+    await API.post('/profile/', {
+      user_id: userId,
+      birthDate: profile.value.birthDate,
+      gender: profile.value.gender,
+      height: profile.value.height,
+      weight: w,
+      targetWeight: profile.value.targetWeight,
+      fatLossWeeks: profile.value.fatLossWeeks,
+      allergies: profile.value.allergies || [],
+      dislikes: profile.value.dislikes || []
+    })
+    profile.value.weight = w
+  } catch (e) {
+    console.error(e)
+  } finally {
+    weightSaving.value = false
   }
 }
 
@@ -406,6 +461,51 @@ onMounted(async () => {
 .ring-card.info ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 .ring-card.info li { color: #5d6878; font-size: 13px; }
 
+.weight-entry {
+  margin-top: 14px;
+  border-top: 1px dashed #e3e8ef;
+  padding-top: 12px;
+}
+.weight-entry h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #2c3348;
+}
+.we-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.we-input-wrap {
+  position: relative;
+}
+.we-input-wrap input {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  padding: 8px 44px 8px 9px;
+  font-size: 12px;
+}
+.we-unit {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #7c8797;
+}
+.we-save-btn {
+  border: 1px solid #1f2329;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2329;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.we-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 .exercise-entry {
   margin-top: 14px;
   border-top: 1px dashed #e3e8ef;
@@ -428,6 +528,24 @@ onMounted(async () => {
   border-radius: 8px;
   padding: 7px 9px;
   font-size: 12px;
+}
+.ee-input-wrap {
+  position: relative;
+}
+.ee-input-wrap input {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  padding: 7px 44px 7px 9px;
+  font-size: 12px;
+}
+.ee-unit {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #7c8797;
 }
 .ee-preview {
   font-size: 12px;

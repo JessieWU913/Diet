@@ -31,23 +31,32 @@
           <div v-for="(ing, iIdx) in item.parsedIngredients" :key="iIdx" class="ing-row">
             <span class="ing-name">{{ ing.name }}</span>
             <span v-if="ing.amount" class="ing-amount">{{ ing.amount }}</span>
-            <button class="ing-replace-btn" @click="findSimilar(item, iIdx, ing.lookupName)">替换</button>
-            <button class="ing-conflict-btn" @click="checkConflict(item, iIdx, ing.lookupName)">同食禁忌</button>
+            <button class="ing-replace-btn" @click="openRelationPanel(item, iIdx, 'overlaps')">替换（重叠）</button>
+            <button class="ing-conflict-btn" @click="openRelationPanel(item, iIdx, 'conflicts')">同食禁忌（互斥）</button>
+            <button class="ing-complement-btn" @click="openRelationPanel(item, iIdx, 'complements')">互补</button>
 
-            <div v-if="ing.showSimilar" class="similar-panel">
-              <div v-if="ing.similarLoading" class="sp-loading">搜索中...</div>
-              <div v-else-if="ing.similars && ing.similars.length > 0" class="sp-list">
-                <span v-for="s in ing.similars" :key="s" class="sp-tag" @click="replaceIngredient(item, iIdx, s)">{{ s }}</span>
+            <div v-if="ing.panelMode === 'overlaps'" class="similar-panel">
+              <div v-if="ing.relationLoading" class="sp-loading">搜索中...</div>
+              <div v-else-if="ing.overlaps && ing.overlaps.length > 0" class="sp-list">
+                <span v-for="s in ing.overlaps" :key="s" class="sp-tag" @click="replaceIngredient(item, iIdx, s)">{{ s }}</span>
               </div>
-              <div v-else class="sp-empty">未找到相似食材</div>
+              <div v-else class="sp-empty">未找到可替换（重叠）食材</div>
             </div>
 
-            <div v-if="ing.showConflict" class="conflict-panel">
-              <div v-if="ing.conflictLoading" class="cp-loading">查询中...</div>
+            <div v-if="ing.panelMode === 'conflicts'" class="conflict-panel">
+              <div v-if="ing.relationLoading" class="cp-loading">查询中...</div>
               <div v-else-if="ing.conflicts && ing.conflicts.length > 0" class="cp-list">
                 <span v-for="c in ing.conflicts" :key="c" class="cp-tag">{{ c }}</span>
               </div>
               <div v-else class="cp-safe">暂无已知同食禁忌</div>
+            </div>
+
+            <div v-if="ing.panelMode === 'complements'" class="complement-panel">
+              <div v-if="ing.relationLoading" class="cp-loading">查询中...</div>
+              <div v-else-if="ing.complements && ing.complements.length > 0" class="cp-list">
+                <span v-for="c in ing.complements" :key="c" class="cmp-tag">{{ c }}</span>
+              </div>
+              <div v-else class="cp-safe">暂无已知互补食材</div>
             </div>
           </div>
         </div>
@@ -180,12 +189,11 @@ const parseIngredients = (raw) => {
         name,
         amount: split.amount,
         lookupName: normalizeIngredientName(name),
-        showSimilar: false,
-        similars: [],
-        similarLoading: false,
-        showConflict: false,
+        panelMode: '',
+        relationLoading: false,
+        overlaps: [],
         conflicts: [],
-        conflictLoading: false
+        complements: []
       }
     })
   } catch {
@@ -198,12 +206,11 @@ const parseIngredients = (raw) => {
         name,
         amount: split.amount,
         lookupName: normalizeIngredientName(name),
-        showSimilar: false,
-        similars: [],
-        similarLoading: false,
-        showConflict: false,
+        panelMode: '',
+        relationLoading: false,
+        overlaps: [],
         conflicts: [],
-        conflictLoading: false
+        complements: []
       }
     })
   }
@@ -337,22 +344,47 @@ const closeDetail = () => {
   detailData.value = null
 }
 
-// 替换食材
-const findSimilar = async (item, iIdx, name) => {
-  const ing = item.parsedIngredients[iIdx]
-  ing.showSimilar = !ing.showSimilar
-  ing.showConflict = false
-  if (!ing.showSimilar) return
-  if (ing.similars.length > 0) return
-  ing.similarLoading = true
-  try {
-    const res = await API.get(`/similar-ingredient/?name=${encodeURIComponent(name)}`)
-    ing.similars = res.data.similar || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    ing.similarLoading = false
+const fetchIngredientRelations = async (ing) => {
+  const candidates = [ing.lookupName, ing.name, ing.display]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+
+  const seen = new Set()
+  for (const name of candidates) {
+    if (seen.has(name)) continue
+    seen.add(name)
+    try {
+      const res = await API.get(`/ingredient-detail/?name=${encodeURIComponent(name)}`)
+      const rel = res?.data?.data?.relations || {}
+      const asNames = (arr) => (Array.isArray(arr) ? [...new Set(arr.map((x) => x?.name).filter(Boolean))] : [])
+      ing.overlaps = asNames(rel.overlaps)
+      ing.conflicts = asNames(rel.conflicts)
+      ing.complements = asNames(rel.complements)
+      return
+    } catch {
+      // Try next candidate.
+    }
   }
+  ing.overlaps = []
+  ing.conflicts = []
+  ing.complements = []
+}
+
+const openRelationPanel = async (item, iIdx, mode) => {
+  const ing = item.parsedIngredients[iIdx]
+  if (ing.panelMode === mode) {
+    ing.panelMode = ''
+    return
+  }
+  ing.panelMode = mode
+
+  if (ing.overlaps.length || ing.conflicts.length || ing.complements.length) {
+    return
+  }
+
+  ing.relationLoading = true
+  await fetchIngredientRelations(ing)
+  ing.relationLoading = false
 }
 
 const replaceIngredient = (item, iIdx, newName) => {
@@ -360,26 +392,10 @@ const replaceIngredient = (item, iIdx, newName) => {
   ing.display = newName
   ing.name = newName
   ing.lookupName = normalizeIngredientName(newName)
-  ing.showSimilar = false
-  ing.similars = []
-}
-
-// 冲突检查
-const checkConflict = async (item, iIdx, name) => {
-  const ing = item.parsedIngredients[iIdx]
-  ing.showConflict = !ing.showConflict
-  ing.showSimilar = false
-  if (!ing.showConflict) return
-  if (ing.conflicts.length > 0) return
-  ing.conflictLoading = true
-  try {
-    const res = await API.get(`/food-conflict/?name=${encodeURIComponent(name)}`)
-    ing.conflicts = res.data.conflicts || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    ing.conflictLoading = false
-  }
+  ing.panelMode = ''
+  ing.overlaps = []
+  ing.conflicts = []
+  ing.complements = []
 }
 
 // 购物清单：按菜品分组列出所有食材
@@ -453,10 +469,13 @@ onMounted(() => loadCollections())
 .ing-replace-btn, .ing-conflict-btn { padding: 3px 10px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
 .ing-replace-btn:hover { background: #ede9fc; border-color: #7761e5; color: #7761e5; }
 .ing-conflict-btn:hover { background: #fef5e0; border-color: #f6c342; color: #d4a017; }
+.ing-complement-btn { padding: 3px 10px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: .2s; }
+.ing-complement-btn:hover { background: #e9f9ef; border-color: #67c78d; color: #2b8b50; }
 
-.similar-panel, .conflict-panel { width: 100%; padding: 8px 12px; margin-top: 4px; border-radius: 8px; }
+.similar-panel, .conflict-panel, .complement-panel { width: 100%; padding: 8px 12px; margin-top: 4px; border-radius: 8px; }
 .similar-panel { background: #ede9fc; }
 .conflict-panel { background: #fef5e0; }
+.complement-panel { background: #ecfbf2; }
 .sp-loading, .cp-loading { font-size: 12px; color: #636e72; }
 .sp-empty, .cp-safe { font-size: 12px; color: #4aa458; }
 .sp-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -464,6 +483,7 @@ onMounted(() => loadCollections())
 .sp-tag:hover { background: #7761e5; color: #fff; }
 .cp-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-tag { background: #fff; border: 1px solid #f6c342; color: #b38600; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+.cmp-tag { background: #fff; border: 1px solid #67c78d; color: #2f9f5f; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
 
 /* 弹窗通用 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
