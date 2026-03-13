@@ -31,8 +31,8 @@
         </div>
       </div>
       <div class="filter-action">
-        <button class="reset-btn" @click="resetFilters">Reset</button>
-        <button class="apply-btn" @click="applyFilters">Apply Filters</button>
+        <button class="reset-btn" @click="resetFilters">重置</button>
+        <button class="apply-btn" @click="applyFilters">应用筛选</button>
       </div>
     </div>
 
