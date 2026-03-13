@@ -1,22 +1,18 @@
 <template>
   <div class="ingredient-search-view">
     <div class="page-header">
-      <h2>{{ queryType === 'ingredient' ? '食材具体查询' : '菜谱具体查询' }}</h2>
-      <p>{{ queryType === 'ingredient' ? '输入食材名称，查看完整营养信息与互补/互斥/重叠关系。' : '输入菜谱名称，查看完整属性、营养、配料与步骤信息。' }}</p>
+      <h2>食材/菜谱具体查询</h2>
+      <p>输入名称后自动识别类型，查看完整信息。</p>
     </div>
 
     <div class="search-bar">
-      <select v-model="queryType" class="type-select" :disabled="loading">
-        <option value="ingredient">食材</option>
-        <option value="recipe">菜谱</option>
-      </select>
       <div class="autocomplete-wrap">
         <input
           v-model="keyword"
-          @keyup.enter="searchCurrent"
+          @keyup.enter="searchAuto"
           @focus="showSuggestions = true"
           @blur="hideSuggestionsWithDelay"
-          :placeholder="queryType === 'ingredient' ? '例如：菠菜、鸡蛋、三文鱼' : '例如：番茄鸡蛋汤、青椒肉丝'"
+          placeholder="例如：菠菜、鸡蛋、番茄牛肉"
           :disabled="loading"
         />
         <div v-if="showSuggestions && suggestions.length > 0" class="search-results">
@@ -34,10 +30,12 @@
           </button>
         </div>
       </div>
-      <button class="query-btn" @click="searchCurrent" :disabled="loading || !keyword.trim()">
+      <button class="query-btn" @click="searchAuto" :disabled="loading || !keyword.trim()">
         {{ loading ? '查询中...' : '查询' }}
       </button>
     </div>
+
+    <div v-if="recognitionText" class="recognition-box">{{ recognitionText }}</div>
 
     <div v-if="errorText" class="error-box">{{ errorText }}</div>
 
@@ -223,9 +221,9 @@ import API from '../api.js'
 import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
 const keyword = ref('')
-const queryType = ref('ingredient')
 const loading = ref(false)
 const errorText = ref('')
+const recognitionText = ref('')
 const result = ref(null)
 const suggestions = ref([])
 const showSuggestions = ref(false)
@@ -659,8 +657,6 @@ const fetchSuggestions = async (q) => {
       const name = (row.name || '').trim()
       if (!name) return
       const type = row.type || 'Unknown'
-      if (queryType.value === 'ingredient' && type !== 'Ingredient') return
-      if (queryType.value === 'recipe' && type !== 'Recipe') return
       if (!uniq.has(name)) {
         uniq.set(name, { name, type, calories: row.calories })
       }
@@ -673,23 +669,17 @@ const fetchSuggestions = async (q) => {
 
 watch(keyword, (val) => {
   const q = (val || '').trim()
+  recognitionText.value = ''
   if (suggestTimer) clearTimeout(suggestTimer)
   suggestTimer = setTimeout(() => {
     fetchSuggestions(q)
   }, 250)
 })
 
-watch(queryType, () => {
-  showSuggestions.value = false
-  suggestions.value = []
-  result.value = null
-  errorText.value = ''
-})
-
 const selectSuggestion = (item) => {
   keyword.value = item?.name || ''
   showSuggestions.value = false
-  searchCurrent()
+  searchByType(item?.type, item?.name)
 }
 
 const hideSuggestionsWithDelay = () => {
@@ -701,29 +691,92 @@ const hideSuggestionsWithDelay = () => {
 const jumpToIngredient = (name) => {
   const n = String(name || '').trim()
   if (!n) return
-  queryType.value = 'ingredient'
   keyword.value = n
-  searchCurrent()
+  searchByType('Ingredient', n)
 }
 
-const searchCurrent = async () => {
-  const q = keyword.value.trim()
+const formatTypeLabel = (rawType) => {
+  return String(rawType || '').toLowerCase() === 'recipe' ? '菜谱' : '食材'
+}
+
+const searchByType = async (rawType, rawName, options = {}) => {
+  const q = String(rawName || '').trim() || keyword.value.trim()
   if (!q || loading.value) return
+
+  const {
+    suppressError = false,
+    fixedRecognitionText = ''
+  } = options
+  const label = formatTypeLabel(rawType)
 
   loading.value = true
   showSuggestions.value = false
   errorText.value = ''
   result.value = null
+  recognitionText.value = fixedRecognitionText || `已识别为：${label}`
 
   try {
-    const endpoint = queryType.value === 'recipe' ? '/recipe-detail/' : '/ingredient-detail/'
+    const type = String(rawType || '').toLowerCase()
+    const endpoint = type === 'recipe' ? '/recipe-detail/' : '/ingredient-detail/'
     const res = await API.get(`${endpoint}?name=${encodeURIComponent(q)}`)
     result.value = res.data.data
+    return { ok: true, notFound: false }
   } catch (e) {
-    errorText.value = e?.response?.data?.error || '查询失败，请稍后重试'
+    const status = e?.response?.status
+    if (!suppressError) {
+      if (status === 404) {
+        errorText.value = `未找到${label}「${q}」`
+      } else {
+        errorText.value = e?.response?.data?.error || `${label}查询失败，请稍后重试`
+      }
+    }
+    return { ok: false, notFound: status === 404 }
   } finally {
     loading.value = false
   }
+}
+
+const searchAuto = async () => {
+  const q = keyword.value.trim()
+  if (!q || loading.value) return
+  recognitionText.value = ''
+  errorText.value = ''
+  result.value = null
+
+  try {
+    const res = await API.get(`/food-search/?q=${encodeURIComponent(q)}`)
+    const rows = res?.data?.data || []
+    const exact = rows.find((x) => String(x?.name || '').toLowerCase() === q.toLowerCase())
+    const picked = exact || rows[0]
+    if (picked?.type) {
+      await searchByType(picked.type, q)
+      return
+    }
+    recognitionText.value = '未识别出明确类型，已自动尝试食材与菜谱'
+  } catch {
+    recognitionText.value = '类型识别服务暂不可用，已自动尝试食材与菜谱'
+  }
+
+  // Fallback:先按食材查，失败再按菜谱查。
+  const ingredientRes = await searchByType('Ingredient', q, {
+    suppressError: true,
+    fixedRecognitionText: '未识别出明确类型，已自动尝试食材与菜谱'
+  })
+  if (ingredientRes?.ok) {
+    recognitionText.value = '已识别为：食材'
+    return
+  }
+
+  const recipeRes = await searchByType('Recipe', q, {
+    suppressError: true,
+    fixedRecognitionText: '未识别出明确类型，已自动尝试食材与菜谱'
+  })
+  if (recipeRes?.ok) {
+    recognitionText.value = '已识别为：菜谱'
+    return
+  }
+
+  errorText.value = `未找到食材「${q}」，也未找到菜谱「${q}」`
 }
 
 onMounted(async () => {
@@ -748,17 +801,6 @@ onBeforeUnmount(() => {
 
 .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
 .autocomplete-wrap { position: relative; flex: 1; }
-.type-select {
-  border: 2px solid #dfe6e9;
-  border-radius: 12px;
-  padding: 0 12px;
-  font-size: 15px;
-  background: #fff;
-  color: #2d3436;
-  min-width: 92px;
-  outline: none;
-}
-.type-select:focus { border-color: #7761e5; }
 .search-bar input {
   width: 100%;
   border: 2px solid #dfe6e9;
@@ -826,6 +868,16 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .search-bar > .query-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.recognition-box {
+  margin-bottom: 10px;
+  background: #ecf8f2;
+  color: #226a49;
+  border: 1px solid #bfe8d2;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
 
 .error-box {
   margin-bottom: 14px;

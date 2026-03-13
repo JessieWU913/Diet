@@ -25,7 +25,7 @@
           <span class="nav-icon"></span><span>食谱推荐</span>
         </router-link>
         <router-link to="/stats" class="nav-item">
-          <span class="nav-icon"></span><span>营养分析</span>
+          <span class="nav-icon"></span><span>数据分析</span>
         </router-link>
         <router-link to="/chat" class="nav-item">
           <span class="nav-icon"></span><span>AI 助手</span>
