@@ -3,6 +3,11 @@
     <div class="auth-card">
       <h2 class="auth-title">{{ isLoginMode ? '欢迎回来' : '创建新账号' }}</h2>
 
+      <div class="login-type-switch">
+        <button :class="['type-btn', { active: !isAdminMode }]" @click="switchAdminMode(false)">用户</button>
+        <button :class="['type-btn', { active: isAdminMode }]" @click="switchAdminMode(true)">管理员</button>
+      </div>
+
       <form @submit.prevent="handleSubmit" class="auth-form">
         <div class="form-group">
           <label>账号 (User ID)</label>
@@ -15,7 +20,7 @@
           />
         </div>
 
-        <div v-if="!isLoginMode" class="form-group">
+        <div v-if="!isLoginMode && !isAdminMode" class="form-group">
           <label>昵称 (可选)</label>
           <input
             type="text"
@@ -41,7 +46,7 @@
           </div>
         </div>
 
-        <div v-if="!isLoginMode" class="form-group">
+        <div v-if="!isLoginMode && !isAdminMode" class="form-group">
           <label>确认密码</label>
           <div class="password-wrap">
             <input
@@ -58,11 +63,11 @@
         </div>
 
         <button type="submit" class="submit-btn" :disabled="loading">
-          {{ loading ? '处理中...' : (isLoginMode ? '立即登录' : '注册账号') }}
+          {{ loading ? '处理中...' : (isAdminMode ? '管理员登录' : (isLoginMode ? '立即登录' : '注册账号')) }}
         </button>
       </form>
 
-      <div class="auth-switch">
+      <div class="auth-switch" v-if="!isAdminMode">
         <span>{{ isLoginMode ? '还没有账号？' : '已有账号？' }}</span>
         <a href="#" @click.prevent="toggleMode">
           {{ isLoginMode ? '立即注册' : '直接登录' }}
@@ -87,6 +92,16 @@ const userName = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
+const isAdminMode = ref(false)
+
+const switchAdminMode = (enabled) => {
+  isAdminMode.value = enabled
+  isLoginMode.value = true
+  userId.value = ''
+  password.value = ''
+  confirmPassword.value = ''
+  userName.value = ''
+}
 
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value
@@ -116,6 +131,23 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
+    if (isAdminMode.value) {
+      const adminRes = await axios.post('http://127.0.0.1:8000/api/admin/auth/', {
+        admin_id: cleanUserId,
+        password: cleanPassword
+      })
+      if (adminRes.data.status === 'success') {
+        localStorage.setItem('is_admin', '1')
+        localStorage.setItem('admin_token', adminRes.data.token)
+        localStorage.setItem('user_name', '管理员')
+        localStorage.removeItem('user_id')
+        router.push('/admin')
+        return
+      }
+      alert(adminRes.data.error || '管理员登录失败')
+      return
+    }
+
     const response = await axios.post('http://127.0.0.1:8000/api/auth/', {
       user_id: cleanUserId,
       password: cleanPassword,
@@ -125,6 +157,8 @@ const handleSubmit = async () => {
 
     if (response.data.status === 'success') {
       if (isLoginMode.value) {
+        localStorage.removeItem('is_admin')
+        localStorage.removeItem('admin_token')
         localStorage.setItem('user_id', cleanUserId)
         router.push('/chat')
       } else {
@@ -155,6 +189,29 @@ const handleSubmit = async () => {
   box-shadow: 0 20px 60px rgba(0,0,0,0.2); text-align: center;
 }
 .auth-title { margin-top: 0; margin-bottom: 30px; color: #2d2346; font-size: 24px; }
+.login-type-switch {
+  margin: -10px auto 20px;
+  background: #f2f5fb;
+  border-radius: 999px;
+  padding: 4px;
+  width: 220px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.type-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: transparent;
+  cursor: pointer;
+  color: #62717f;
+  font-weight: 700;
+}
+.type-btn.active {
+  background: #7761e5;
+  color: #fff;
+}
 .form-group { text-align: left; margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #34495e; font-size: 14px; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; }

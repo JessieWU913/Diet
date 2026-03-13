@@ -9,6 +9,7 @@ import ChatView from '../views/ChatView.vue'
 import HealthLogView from '../views/HealthLogView.vue'
 import FavoritesView from '../views/FavoritesView.vue'
 import IngredientSearchView from '../views/IngredientSearchView.vue'
+import AdminView from '../views/AdminView.vue'
 
 const routes = [
   { path: '/', redirect: '/diet-log' },
@@ -20,6 +21,7 @@ const routes = [
   { path: '/health-log', name: 'HealthLog', component: HealthLogView, meta: { requiresAuth: true } },
   { path: '/favorites', name: 'Favorites', component: FavoritesView, meta: { requiresAuth: true } },
   { path: '/ingredient-search', name: 'IngredientSearch', component: IngredientSearchView, meta: { requiresAuth: true } },
+  { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAdmin: true } },
 ]
 
 const router = createRouter({
@@ -29,8 +31,15 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const isAuthenticated = localStorage.getItem('user_id')
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  const isAdmin = localStorage.getItem('is_admin') === '1'
+  const adminToken = localStorage.getItem('admin_token')
+
+  if (to.meta.requiresAdmin && !(isAdmin && adminToken)) {
     next({ name: 'Login' })
+  } else if (to.meta.requiresAuth && !isAuthenticated) {
+    next({ name: 'Login' })
+  } else if (to.name === 'Login' && isAdmin && adminToken) {
+    next({ name: 'Admin' })
   } else if (to.name === 'Login' && isAuthenticated) {
     next({ name: 'DietLog' })
   } else {

@@ -2,6 +2,8 @@ import uuid
 import json
 import os
 import re
+import secrets
+import difflib
 from datetime import datetime, timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -19,6 +21,25 @@ from django.contrib.auth.hashers import make_password, check_password
 
 
 _recipe_enrich_llm = None
+_admin_sessions = {}
+
+ADMIN_DEFAULT_ID = os.getenv("ADMIN_DEFAULT_ID", "admin")
+ADMIN_DEFAULT_PASSWORD = os.getenv("ADMIN_DEFAULT_PASSWORD", "123")
+
+SYNONYM_DICT = {
+    "小麦粉(标准粉)": "小麦粉(标准粉)",
+    "小麦粉": "小麦粉(标准粉)",
+    "西红柿": "番茄",
+    "地瓜": "红薯",
+    "马铃薯": "土豆",
+    "洋芋": "土豆",
+    "大蒜": "蒜",
+    "姜": "生姜",
+    "鲜牛奶": "牛奶",
+    "纯牛奶": "牛奶",
+    "瘦肉": "猪肉(瘦)",
+    "精肉": "猪肉(瘦)",
+}
 
 
 def _get_recipe_enrich_llm():
@@ -122,6 +143,69 @@ def _to_json_safe(value):
         return {k: _to_json_safe(v) for k, v in value.items()}
     return str(value)
 
+
+def _issue_admin_token():
+    token = secrets.token_urlsafe(24)
+    _admin_sessions[token] = datetime.now() + timedelta(hours=12)
+    return token
+
+
+def _validate_admin_token(request):
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return False
+    token = auth.split(" ", 1)[1].strip()
+    if not token:
+        return False
+    expire_at = _admin_sessions.get(token)
+    if not expire_at:
+        return False
+    if datetime.now() > expire_at:
+        _admin_sessions.pop(token, None)
+        return False
+    return True
+
+
+def _safe_float(value):
+    if value is None:
+        return None
+    try:
+        if str(value).strip() == "":
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _clean_name_for_match(name: str):
+    if not name:
+        return ""
+    raw = str(name).strip()
+    if raw in SYNONYM_DICT:
+        return SYNONYM_DICT[raw]
+    name_clean = re.sub(r"\(.*?\)", "", raw).strip()
+    name_clean = re.sub(r"（.*?）", "", name_clean).strip()
+    return SYNONYM_DICT.get(name_clean, name_clean)
+
+
+def _find_or_create_relation_name(raw_name: str, valid_names: set):
+    if not raw_name:
+        return "", False
+
+    name = str(raw_name).strip()
+    if name in valid_names:
+        return name, False
+
+    cleaned = _clean_name_for_match(name)
+    if cleaned in valid_names:
+        return cleaned, False
+
+    matches = difflib.get_close_matches(cleaned, list(valid_names), n=1, cutoff=0.85)
+    if matches:
+        return matches[0], False
+
+    return cleaned, True
+
 # 用户注册与登录接口
 class UserAuthView(APIView):
     def post(self, request):
@@ -147,14 +231,15 @@ class UserAuthView(APIView):
             print(f"注册准备写入 -> 明文密码: {password} | 加密结果: {hashed_password[:15]}...")
 
             create_cypher = """
-            CREATE (u:User {id: $user_id, name: $name, password: $password})
+            CREATE (u:User {id: $user_id, name: $name, password: $password, created_at: $created_at})
             RETURN u
             """
             try:
                 graph_db.query(create_cypher, {
                     "user_id": user_id,
                     "name": name,
-                    "password": hashed_password
+                    "password": hashed_password,
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
                 print("注册成功，数据已写入 Neo4j")
                 return Response({"status": "success", "message": "注册成功"})
@@ -189,6 +274,503 @@ class UserAuthView(APIView):
 
         else:
             return Response({"error": "无效的操作"}, status=400)
+
+
+class AdminAuthView(APIView):
+    """管理员登录（默认账号：admin / 123）"""
+    def post(self, request):
+        admin_id = str(request.data.get("admin_id", "")).strip()
+        password = str(request.data.get("password", "")).strip()
+
+        if not admin_id or not password:
+            return Response({"error": "管理员账号和密码不能为空"}, status=400)
+
+        if admin_id != ADMIN_DEFAULT_ID or password != ADMIN_DEFAULT_PASSWORD:
+            return Response({"error": "管理员账号或密码错误"}, status=401)
+
+        token = _issue_admin_token()
+        return Response({
+            "status": "success",
+            "message": "管理员登录成功",
+            "token": token,
+            "admin_id": admin_id,
+        })
+
+
+class AdminOverviewView(APIView):
+    """管理员总览：用户注册信息、偏好信息、历史记录"""
+    def get(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        try:
+            users_cypher = """
+            MATCH (u:User)
+            RETURN u.id AS user_id,
+                   coalesce(u.name, '') AS name,
+                   coalesce(u.created_at, '') AS created_at,
+                   coalesce(u.birth_date, '') AS birth_date,
+                   coalesce(u.gender, '') AS gender,
+                   coalesce(u.height, 0) AS height,
+                   coalesce(u.weight, 0) AS weight,
+                   coalesce(u.allergies, []) AS allergies,
+                   coalesce(u.dislikes, []) AS dislikes,
+                   coalesce(u.favorite_ingredients, []) AS favorite_ingredients,
+                   coalesce(u.positive_feedback, []) AS positive_feedback
+            ORDER BY u.id
+            """
+            users = graph_db.query(users_cypher)
+
+            logs_cypher = """
+            MATCH (u:User)-[:HAS_LOG]->(log:DietLog)
+            RETURN u.id AS user_id,
+                   log.id AS log_id,
+                   log.date AS date,
+                   log.meal_type AS meal_type,
+                   log.food_name AS food_name,
+                   log.calories AS calories,
+                   log.protein AS protein,
+                   log.fat AS fat,
+                   log.carbs AS carbs,
+                   log.amount AS amount
+            ORDER BY log.date DESC
+            """
+            log_rows = graph_db.query(logs_cypher)
+
+            chat_cypher = """
+            MATCH (u:User)-[:HAS_CHAT]->(s:ChatSession)
+            OPTIONAL MATCH (s)-[:HAS_MSG]->(m:ChatMessage)
+            WITH u.id AS user_id, s, count(m) AS msg_count
+            RETURN user_id,
+                   s.id AS session_id,
+                   coalesce(s.title, '') AS title,
+                   coalesce(s.created_at, '') AS created_at,
+                   msg_count
+            ORDER BY s.created_at DESC
+            """
+            chat_rows = graph_db.query(chat_cypher)
+
+            logs_map = {}
+            for row in log_rows:
+                uid = row.get("user_id")
+                if not uid:
+                    continue
+                logs_map.setdefault(uid, [])
+                if len(logs_map[uid]) < 20:
+                    logs_map[uid].append(_to_json_safe(row))
+
+            chats_map = {}
+            for row in chat_rows:
+                uid = row.get("user_id")
+                if not uid:
+                    continue
+                chats_map.setdefault(uid, [])
+                if len(chats_map[uid]) < 10:
+                    chats_map[uid].append(_to_json_safe(row))
+
+            merged_users = []
+            for u in users:
+                uid = u.get("user_id")
+                merged_users.append({
+                    "user_id": uid,
+                    "registration": {
+                        "name": u.get("name", ""),
+                        "created_at": u.get("created_at", ""),
+                        "birth_date": u.get("birth_date", ""),
+                        "gender": u.get("gender", ""),
+                        "height": u.get("height", 0),
+                        "weight": u.get("weight", 0),
+                    },
+                    "preferences": {
+                        "allergies": _to_json_safe(u.get("allergies", [])),
+                        "dislikes": _to_json_safe(u.get("dislikes", [])),
+                        "favorite_ingredients": _to_json_safe(u.get("favorite_ingredients", [])),
+                        "positive_feedback": _to_json_safe((u.get("positive_feedback", []) or [])[-5:]),
+                    },
+                    "history": {
+                        "diet_logs": logs_map.get(uid, []),
+                        "chat_sessions": chats_map.get(uid, []),
+                    },
+                })
+
+            total_logs = sum(len(v) for v in logs_map.values())
+            total_chats = sum(len(v) for v in chats_map.values())
+
+            return Response({
+                "status": "success",
+                "stats": {
+                    "user_count": len(merged_users),
+                    "diet_log_count": total_logs,
+                    "chat_session_count": total_chats,
+                },
+                "users": merged_users,
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class AdminDataImportView(APIView):
+    """管理员数据更新：上传 JSON 并导入（食材 / 菜谱 / 食材关系）"""
+
+    def post(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        import_type = str(request.data.get("import_type", "")).strip().lower()
+        upload = request.FILES.get("file")
+        if import_type not in {"ingredient", "recipe", "relation"}:
+            return Response({"error": "import_type 必须是 ingredient / recipe / relation"}, status=400)
+        if not upload:
+            return Response({"error": "请上传 JSON 文件"}, status=400)
+
+        try:
+            raw_text = upload.read().decode("utf-8-sig")
+            payload = json.loads(raw_text)
+        except Exception as e:
+            return Response({"error": f"JSON 解析失败: {e}"}, status=400)
+
+        try:
+            if import_type == "ingredient":
+                stats = self._import_ingredients(payload)
+            elif import_type == "recipe":
+                stats = self._import_recipes(payload)
+            else:
+                stats = self._import_relations(payload)
+
+            return Response({"status": "success", "import_type": import_type, "stats": stats})
+        except Exception as e:
+            return Response({"error": f"导入失败: {e}"}, status=500)
+
+    def _import_ingredients(self, data):
+        if not isinstance(data, list):
+            raise ValueError("食材 JSON 必须是数组")
+
+        dedup = {}
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+
+            nutrients = item.get("nutrients", {}) if isinstance(item.get("nutrients"), dict) else {}
+            existing = dedup.get(name, {
+                "name": name,
+                "original_name": "",
+                "category": "",
+                "cal_per_100g": None,
+                "unit_info": [],
+                "nutrients": {},
+                "raw_items": [],
+            })
+
+            existing["original_name"] = str(item.get("original_name") or existing["original_name"] or name).strip()
+            existing["category"] = str(item.get("category") or existing["category"] or "Other").strip() or "Other"
+            cp = _safe_float(item.get("cal_per_100g"))
+            if cp is not None:
+                existing["cal_per_100g"] = cp
+
+            unit_info = item.get("unit_info", [])
+            if isinstance(unit_info, list):
+                existing["unit_info"].extend(unit_info)
+
+            existing["nutrients"].update(nutrients)
+            existing["raw_items"].append(item)
+            dedup[name] = existing
+
+        upsert_query = """
+        MERGE (i:Ingredient {name: $name})
+        ON CREATE SET i.created_at = $now
+        SET i.updated_at = $now,
+            i.original_name = CASE WHEN $original_name <> '' THEN $original_name ELSE coalesce(i.original_name, $name) END,
+            i.category = CASE WHEN $category <> '' THEN $category ELSE coalesce(i.category, 'Other') END,
+            i.calories = CASE WHEN $calories IS NULL THEN i.calories ELSE $calories END,
+            i.protein = CASE WHEN $protein IS NULL THEN i.protein ELSE $protein END,
+            i.fat = CASE WHEN $fat IS NULL THEN i.fat ELSE $fat END,
+            i.carbs = CASE WHEN $carbs IS NULL THEN i.carbs ELSE $carbs END,
+            i.fiber = CASE WHEN $fiber IS NULL THEN i.fiber ELSE $fiber END,
+            i.cal_per_100g = CASE WHEN $cal_per_100g IS NULL THEN i.cal_per_100g ELSE $cal_per_100g END,
+            i.unit_info = CASE WHEN $unit_info = '' THEN i.unit_info ELSE $unit_info END,
+            i.nutrients_raw = CASE WHEN $nutrients_raw = '' THEN i.nutrients_raw ELSE $nutrients_raw END,
+            i.nutrient_count = CASE WHEN $nutrient_count IS NULL THEN i.nutrient_count ELSE $nutrient_count END,
+            i.missing_info = false,
+            i.source = 'admin_upload'
+        """
+
+        nutrient_rel_query = """
+        MATCH (i:Ingredient {name: $ingredient_name})
+        MERGE (n:Nutrient {name: $nutrient_name})
+        SET n.updated_at = $now
+        MERGE (i)-[r:HAS_NUTRIENT]->(n)
+        SET r.value = $value, r.unit = $unit, r.updated_at = $now
+        """
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        nutrient_rel_count = 0
+        with graph_db.driver.session() as session:
+            for row in dedup.values():
+                nutrients = row.get("nutrients", {}) if isinstance(row.get("nutrients"), dict) else {}
+                calories = _safe_float((nutrients.get("热量") or {}).get("value") if isinstance(nutrients.get("热量"), dict) else None)
+                protein = _safe_float((nutrients.get("蛋白质") or {}).get("value") if isinstance(nutrients.get("蛋白质"), dict) else None)
+                fat = _safe_float((nutrients.get("脂肪") or {}).get("value") if isinstance(nutrients.get("脂肪"), dict) else None)
+                carbs = _safe_float((nutrients.get("碳水化合物") or {}).get("value") if isinstance(nutrients.get("碳水化合物"), dict) else None)
+                fiber = _safe_float((nutrients.get("纤维素") or {}).get("value") if isinstance(nutrients.get("纤维素"), dict) else None)
+
+                unit_unique = []
+                seen_u = set()
+                for u in row.get("unit_info", []):
+                    key = json.dumps(u, ensure_ascii=False, sort_keys=True)
+                    if key in seen_u:
+                        continue
+                    seen_u.add(key)
+                    unit_unique.append(u)
+
+                session.run(upsert_query, {
+                    "name": row["name"],
+                    "original_name": row.get("original_name") or row["name"],
+                    "category": row.get("category") or "Other",
+                    "calories": calories,
+                    "protein": protein,
+                    "fat": fat,
+                    "carbs": carbs,
+                    "fiber": fiber,
+                    "cal_per_100g": row.get("cal_per_100g"),
+                    "unit_info": json.dumps(unit_unique, ensure_ascii=False),
+                    "nutrients_raw": json.dumps(nutrients, ensure_ascii=False),
+                    "nutrient_count": len(nutrients.keys()),
+                    "now": now,
+                })
+
+                for nk, nv in nutrients.items():
+                    if isinstance(nv, dict):
+                        session.run(nutrient_rel_query, {
+                            "ingredient_name": row["name"],
+                            "nutrient_name": str(nk),
+                            "value": _safe_float(nv.get("value")),
+                            "unit": str(nv.get("unit") or "").strip(),
+                            "now": now,
+                        })
+                        nutrient_rel_count += 1
+
+        return {
+            "input_records": len(data),
+            "deduped_ingredients": len(dedup),
+            "upserted_ingredients": len(dedup),
+            "upserted_nutrient_relations": nutrient_rel_count,
+        }
+
+    def _import_recipes(self, data):
+        if not isinstance(data, list):
+            raise ValueError("菜谱 JSON 必须是数组")
+
+        dedup = {}
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+            dedup[name] = item
+
+        upsert_query = """
+        MERGE (r:Recipe {name: $name})
+        ON CREATE SET r.created_at = $now
+        SET r.updated_at = $now,
+            r.category = CASE WHEN $category <> '' THEN $category ELSE r.category END,
+            r.image = CASE WHEN $image <> '' THEN $image ELSE r.image END,
+            r.calories = CASE WHEN $calories IS NULL THEN r.calories ELSE $calories END,
+            r.protein = CASE WHEN $protein IS NULL THEN r.protein ELSE $protein END,
+            r.fat = CASE WHEN $fat IS NULL THEN r.fat ELSE $fat END,
+            r.carbs = CASE WHEN $carbs IS NULL THEN r.carbs ELSE $carbs END,
+            r.fiber = CASE WHEN $fiber IS NULL THEN r.fiber ELSE $fiber END,
+            r.steps = CASE WHEN $steps = '' THEN r.steps ELSE $steps END,
+            r.ingredients_raw = CASE WHEN $ingredients_raw = '' THEN r.ingredients_raw ELSE $ingredients_raw END,
+            r.nutrients_raw = CASE WHEN $nutrients_raw = '' THEN r.nutrients_raw ELSE $nutrients_raw END,
+            r.health_advice = CASE WHEN $health_advice = '' THEN r.health_advice ELSE $health_advice END,
+            r.is_unhealthy_for_diet = CASE WHEN $is_unhealthy_for_diet IS NULL THEN r.is_unhealthy_for_diet ELSE $is_unhealthy_for_diet END,
+            r.raw_json = CASE WHEN $raw_json = '' THEN r.raw_json ELSE $raw_json END,
+            r.source = 'admin_upload'
+        """
+
+        contains_query = """
+        MATCH (r:Recipe {name: $recipe_name})
+        MERGE (i:Ingredient {name: $ingredient_name})
+        ON CREATE SET i.source = 'recipe_relation', i.missing_info = true, i.created_at = $now
+        MERGE (r)-[rel:CONTAINS]->(i)
+        SET rel.weight_g = $weight_g,
+            rel.raw_text = $raw_text,
+            rel.is_linked = $is_linked,
+            rel.updated_at = $now
+        """
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        contains_count = 0
+        with graph_db.driver.session() as session:
+            for name, item in dedup.items():
+                nutrients = item.get("nutrients", {}) if isinstance(item.get("nutrients"), dict) else {}
+                calories = _safe_float((nutrients.get("热量") or {}).get("value") if isinstance(nutrients.get("热量"), dict) else None)
+                protein = _safe_float((nutrients.get("蛋白质") or {}).get("value") if isinstance(nutrients.get("蛋白质"), dict) else None)
+                fat = _safe_float((nutrients.get("脂肪") or {}).get("value") if isinstance(nutrients.get("脂肪"), dict) else None)
+                carbs = _safe_float((nutrients.get("碳水化合物") or {}).get("value") if isinstance(nutrients.get("碳水化合物"), dict) else None)
+                fiber = _safe_float((nutrients.get("纤维素") or {}).get("value") if isinstance(nutrients.get("纤维素"), dict) else None)
+
+                basic_info = item.get("basic_info", {}) if isinstance(item.get("basic_info"), dict) else {}
+                health_advice = str(item.get("health_advice") or basic_info.get("cooking_type_detail") or "").strip()
+                unhealthy = item.get("is_unhealthy_for_diet")
+                if unhealthy is None and health_advice:
+                    unhealthy = ("不宜食用" in health_advice) or ("少吃" in health_advice)
+
+                steps = item.get("steps", [])
+                if isinstance(steps, list):
+                    steps_text = json.dumps(steps, ensure_ascii=False)
+                else:
+                    steps_text = str(steps or "")
+
+                ingredients = item.get("ingredients", []) if isinstance(item.get("ingredients"), list) else []
+                session.run(upsert_query, {
+                    "name": name,
+                    "category": str(item.get("category") or "").strip(),
+                    "image": str(item.get("image") or "").strip(),
+                    "calories": calories,
+                    "protein": protein,
+                    "fat": fat,
+                    "carbs": carbs,
+                    "fiber": fiber,
+                    "steps": steps_text,
+                    "ingredients_raw": json.dumps(ingredients, ensure_ascii=False),
+                    "nutrients_raw": json.dumps(nutrients, ensure_ascii=False),
+                    "health_advice": health_advice,
+                    "is_unhealthy_for_diet": unhealthy,
+                    "raw_json": json.dumps(item, ensure_ascii=False),
+                    "now": now,
+                })
+
+                for ing in ingredients:
+                    if not isinstance(ing, dict):
+                        continue
+                    ing_name = str(ing.get("ingredient_name") or ing.get("name") or "").strip()
+                    if not ing_name:
+                        continue
+                    session.run(contains_query, {
+                        "recipe_name": name,
+                        "ingredient_name": ing_name,
+                        "weight_g": _safe_float(ing.get("weight_g")) or 0.0,
+                        "raw_text": str(ing.get("raw_text") or "").strip(),
+                        "is_linked": bool(ing.get("is_linked", False)),
+                        "now": now,
+                    })
+                    contains_count += 1
+
+        return {
+            "input_records": len(data),
+            "deduped_recipes": len(dedup),
+            "upserted_recipes": len(dedup),
+            "upserted_contains_relations": contains_count,
+        }
+
+    def _import_relations(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("关系 JSON 必须是对象")
+
+        existing_names = graph_db.query("MATCH (i:Ingredient) RETURN i.name AS name")
+        valid_names = {str(x.get("name", "")).strip() for x in existing_names if x.get("name")}
+
+        rel_queries = {
+            "互斥": """
+                MERGE (a:Ingredient {name: $src})
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                MERGE (b:Ingredient {name: $tgt})
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                MERGE (a)-[r:CLASH_WITH]->(b)
+                SET r.desc = $desc,
+                    r.source_category = $category,
+                    r.source_sub_category = $sub_category,
+                    r.updated_at = $now
+            """,
+            "互补": """
+                MERGE (a:Ingredient {name: $src})
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                MERGE (b:Ingredient {name: $tgt})
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                MERGE (a)-[r:COMPLEMENT_WITH]->(b)
+                SET r.desc = $desc,
+                    r.source_category = $category,
+                    r.source_sub_category = $sub_category,
+                    r.updated_at = $now
+            """,
+            "重叠": """
+                MERGE (a:Ingredient {name: $src})
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                MERGE (b:Ingredient {name: $tgt})
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                MERGE (a)-[r:SIMILAR_TO]->(b)
+                SET r.desc = $desc,
+                    r.source_category = $category,
+                    r.source_sub_category = $sub_category,
+                    r.updated_at = $now
+            """,
+        }
+
+        relation_seen = set()
+        created_name_count = 0
+        relation_count = 0
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with graph_db.driver.session() as session:
+            for category, sub_dict in data.items():
+                if not isinstance(sub_dict, dict):
+                    continue
+                for sub_category, item_list in sub_dict.items():
+                    if not isinstance(item_list, list):
+                        continue
+                    for item in item_list:
+                        if not isinstance(item, dict):
+                            continue
+                        src_raw = item.get("食物名称")
+                        src_final, src_is_new = _find_or_create_relation_name(src_raw, valid_names)
+                        if not src_final:
+                            continue
+                        if src_is_new and src_final not in valid_names:
+                            valid_names.add(src_final)
+                            created_name_count += 1
+
+                        rel_obj = item.get("食物关系", {}) if isinstance(item.get("食物关系"), dict) else {}
+                        for rel_type, targets in rel_obj.items():
+                            if rel_type not in rel_queries or not isinstance(targets, list):
+                                continue
+                            for target in targets:
+                                if not isinstance(target, dict):
+                                    continue
+                                tgt_raw = target.get("食物名称")
+                                desc = str(target.get("描述") or "").strip()
+                                tgt_final, tgt_is_new = _find_or_create_relation_name(tgt_raw, valid_names)
+                                if not tgt_final:
+                                    continue
+                                if tgt_is_new and tgt_final not in valid_names:
+                                    valid_names.add(tgt_final)
+                                    created_name_count += 1
+
+                                dedup_key = (src_final, rel_type, tgt_final)
+                                if dedup_key in relation_seen:
+                                    continue
+                                relation_seen.add(dedup_key)
+
+                                session.run(rel_queries[rel_type], {
+                                    "src": src_final,
+                                    "tgt": tgt_final,
+                                    "desc": desc,
+                                    "category": str(category),
+                                    "sub_category": str(sub_category),
+                                    "now": now,
+                                })
+                                relation_count += 1
+
+        return {
+            "input_groups": len(data.keys()),
+            "upserted_relations": relation_count,
+            "new_ingredient_nodes_created": created_name_count,
+            "deduped_relations": len(relation_seen),
+        }
 
 # 用户资料填写接口
 class UserProfileView(APIView):

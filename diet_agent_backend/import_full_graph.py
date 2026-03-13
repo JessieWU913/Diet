@@ -149,6 +149,18 @@ class DietGraphImporter:
         with self.driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n")
 
+    def clear_domain_data(self):
+        """Clear only import domain data, keep user/account/history nodes."""
+        print("WARNING: clearing ingredient/recipe domain data (preserve user/account data)...")
+        with self.driver.session() as session:
+            session.run(
+                """
+                MATCH (n)
+                WHERE n:Ingredient OR n:Recipe OR n:Nutrient
+                DETACH DELETE n
+                """
+            )
+
     def import_ingredients(self, ingredient_file: str, batch_size: int = 500, import_nutrient_nodes: bool = True):
         print(f"Importing ingredients from: {ingredient_file}")
         with open(ingredient_file, "r", encoding="utf-8") as f:
@@ -469,7 +481,8 @@ def parse_args():
         default=os.getenv("NEO4J_IMPORT_DIR", ""),
         help="Directory containing JSON files (e.g. Neo4j import directory)",
     )
-    parser.add_argument("--clear", action="store_true", help="Clear all graph data before import")
+    parser.add_argument("--clear", action="store_true", help="Clear ingredient/recipe/nutrient graph data before import (preserve users)")
+    parser.add_argument("--clear-all", action="store_true", help="Clear all graph data before import (including users/history)")
     parser.add_argument("--ingredient-batch", type=int, default=500)
     parser.add_argument("--recipe-batch", type=int, default=300)
     parser.add_argument("--relation-batch", type=int, default=1000)
@@ -503,8 +516,10 @@ if __name__ == "__main__":
             except FileNotFoundError as e:
                 print(f"WARNING: relation file not found, skip relation import. {e}")
 
-        if args.clear:
+        if args.clear_all:
             importer.clear_database()
+        elif args.clear:
+            importer.clear_domain_data()
 
         importer.create_constraints()
 

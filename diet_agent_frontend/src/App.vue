@@ -8,6 +8,13 @@
       </div>
 
       <nav class="sidebar-nav">
+        <template v-if="isAdmin">
+          <router-link to="/admin" class="nav-item">
+            <span class="nav-icon"></span><span>管理员面板</span>
+          </router-link>
+        </template>
+
+        <template v-else>
         <router-link to="/diet-log" class="nav-item">
           <span class="nav-icon"></span><span>饮食记录</span>
         </router-link>
@@ -29,6 +36,7 @@
         <router-link to="/favorites" class="nav-item">
           <span class="nav-icon"></span><span>收藏夹</span>
         </router-link>
+        </template>
       </nav>
 
       <div class="sidebar-bottom">
@@ -146,6 +154,7 @@ const userName = ref(localStorage.getItem('user_name') || '')
 const allergyInput = ref('')
 const dislikeInput = ref('')
 const recentPositiveFeedback = ref([])
+const isAdmin = ref(localStorage.getItem('is_admin') === '1')
 
 const userInitial = computed(() => {
   return (userName.value || userId.value || '?')[0].toUpperCase()
@@ -212,6 +221,9 @@ const saveProfile = async () => {
 const logout = () => {
   localStorage.removeItem('user_id')
   localStorage.removeItem('user_name')
+  localStorage.removeItem('is_admin')
+  localStorage.removeItem('admin_token')
+  isAdmin.value = false
   showProfileModal.value = false
   router.push('/login')
 }
@@ -219,6 +231,13 @@ const logout = () => {
 watch(showProfileModal, (v) => { if (v) loadProfile() })
 
 onMounted(() => {
+  userId.value = localStorage.getItem('user_id') || ''
+  userName.value = localStorage.getItem('user_name') || ''
+  isAdmin.value = localStorage.getItem('is_admin') === '1'
+})
+
+watch(() => route.fullPath, () => {
+  isAdmin.value = localStorage.getItem('is_admin') === '1'
   userId.value = localStorage.getItem('user_id') || ''
   userName.value = localStorage.getItem('user_name') || ''
 })

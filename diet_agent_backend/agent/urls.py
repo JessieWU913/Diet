@@ -4,13 +4,16 @@ from .views import (
     RecipeDetailView, MealEventView, FoodSearchView, DietLogView,
     NutritionSummaryView, RecommendMealsView, FavoriteIngredientsView,
     SimilarIngredientView, FoodConflictView, UserCollectionView, ChatHistoryView,
-    IngredientDetailView
+    IngredientDetailView, AdminAuthView, AdminOverviewView, AdminDataImportView
 )
 
 urlpatterns = [
     path('chat/', AgentChatView.as_view(), name='chat'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('auth/', UserAuthView.as_view(), name='auth'),
+    path('admin/auth/', AdminAuthView.as_view(), name='admin_auth'),
+    path('admin/overview/', AdminOverviewView.as_view(), name='admin_overview'),
+    path('admin/import-json/', AdminDataImportView.as_view(), name='admin_import_json'),
     path('feedback/', FeedbackView.as_view(), name='feedback'),
     path('recipe/', RecipeDetailView.as_view(), name='recipe'),
     path('meal-event/', MealEventView.as_view(), name='meal_event'),
