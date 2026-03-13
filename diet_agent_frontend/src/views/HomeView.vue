@@ -38,14 +38,31 @@
         <div>还需减重：{{ formatNum(progress.leftKg) }} kg</div>
       </div>
     </section>
+
+    <section class="nav-board">
+      <div class="nb-head">
+      </div>
+      <div class="nb-grid">
+        <article class="nb-card" v-for="item in navPanels" :key="item.path">
+          <div class="nb-top">
+            <h4>{{ item.title }}</h4>
+            <span class="nb-tag">{{ item.tag }}</span>
+          </div>
+          <p class="nb-desc">{{ item.desc }}</p>
+          <button class="nb-btn" @click="go(item.path)">进入 {{ item.title }}</button>
+        </article>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import API from '../api.js'
 
 const userId = localStorage.getItem('user_id') || ''
+const router = useRouter()
 
 const profile = ref({
   initialWeight: 0,
@@ -91,6 +108,21 @@ const ringStyle = computed(() => {
     background: `conic-gradient(#3dcf8e ${angle}, #e9edf3 0deg)`
   }
 })
+
+const navPanels = computed(() => [
+  { path: '/home', title: '主页', tag: '总览', desc: '查看当前减重进度、阶段周数与体重里程碑。' },
+  { path: '/diet-log', title: '饮食记录', tag: '记录', desc: '按日期登记三餐与加餐，形成可追踪的摄入轨迹。' },
+  { path: '/recipes', title: '食谱推荐', tag: '推荐', desc: '基于目标与偏好获取菜谱，支持导出到每日计划。' },
+  { path: '/stats', title: '健康管理', tag: '分析', desc: '查看预算、营养分配、运动消耗与 AI 智能分析建议。' },
+  { path: '/chat', title: 'AI 助手', tag: '问答', desc: '和 AI 对话获取实时饮食建议、替代方案和计划调整。' },
+  { path: '/ingredient-search', title: '饮食查询', tag: '查询', desc: '查询食材营养、关系与搭配，快速做出更优选择。' },
+  { path: '/health-log', title: '健康日志', tag: '追踪', desc: '记录体感、状态和习惯，帮助识别减脂中的关键变量。' },
+  { path: '/favorites', title: '收藏夹', tag: '沉淀', desc: '沉淀高频菜谱与食材替换方案，形成个人饮食资产。' },
+])
+
+const go = (path) => {
+  router.push(path)
+}
 
 const loadProfile = async () => {
   if (!userId) return
@@ -182,11 +214,103 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.nav-board {
+  margin-top: 16px;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid #e8edf3;
+  box-shadow: 0 8px 26px rgba(16, 24, 40, .06);
+  padding: 22px;
+}
+
+.nb-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.nb-head h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #2e344d;
+}
+
+.nb-head p {
+  margin: 0;
+  font-size: 13px;
+  color: #8893a1;
+}
+
+.nb-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nb-card {
+  border: 1px solid #edf1f5;
+  background: #fbfcfe;
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 146px;
+}
+
+.nb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nb-top h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #2e344d;
+}
+
+.nb-tag {
+  font-size: 11px;
+  color: #51627a;
+  background: #eaf1ff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.nb-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #667486;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.nb-btn {
+  border: 1px solid #1f2329;
+  background: #fff;
+  color: #1f2329;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.nb-btn:hover { background: #f5f7fa; }
+
 @media (max-width: 1100px) {
   .wm-main { grid-template-columns: 1fr; }
   .wm-week { font-size: 22px; }
   .wm-head h3 { font-size: 24px; }
   .wm-label { font-size: 18px; }
   .wm-num { font-size: 36px; }
+  .nb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .nb-grid { grid-template-columns: 1fr; }
 }
 </style>

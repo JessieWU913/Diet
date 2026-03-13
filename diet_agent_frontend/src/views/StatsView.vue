@@ -117,6 +117,34 @@
         </div>
       </section>
     </div>
+
+    <section class="ai-board">
+      <div class="ai-board-head">
+        <h3>AI 智能营养分析</h3>
+      </div>
+      <p class="ai-summary">{{ aiInsight.summary }}</p>
+
+      <div class="ai-grid">
+        <div class="ai-col">
+          <h4>营养分析</h4>
+          <ul>
+            <li v-for="(line, idx) in aiInsight.nutrition" :key="`n-${idx}`">{{ line }}</li>
+          </ul>
+        </div>
+        <div class="ai-col">
+          <h4>饮食建议</h4>
+          <ul>
+            <li v-for="(line, idx) in aiInsight.suggestions" :key="`s-${idx}`">{{ line }}</li>
+          </ul>
+        </div>
+        <div class="ai-col">
+          <h4>减脂小 Tips</h4>
+          <ul>
+            <li v-for="(line, idx) in fatLossTips" :key="`t-${idx}`">{{ line }}</li>
+          </ul>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -251,6 +279,63 @@ const macroPct = (value, goal) => {
   const g = Math.max(1, Number(goal || 1))
   return Math.max(0, Math.min(100, Math.round((Number(value || 0) / g) * 100)))
 }
+
+const macroStatus = (value, goal) => {
+  const ratio = Number(value || 0) / Math.max(1, Number(goal || 1))
+  if (ratio < 0.85) return '偏低'
+  if (ratio > 1.15) return '偏高'
+  return '达标'
+}
+
+const aiInsight = computed(() => {
+  const calIn = toInt(dayTotals.value.calories)
+  const calPlan = toInt(plan.value.calories)
+  const calRemain = toInt(remainCalories.value)
+  const proteinStatus = macroStatus(dayTotals.value.protein, plan.value.protein)
+  const fatStatus = macroStatus(dayTotals.value.fat, plan.value.fat)
+  const carbStatus = macroStatus(dayTotals.value.carbs, plan.value.carbs)
+
+  let summary = `你在 ${selectedDate.value} 的摄入为 ${calIn} kcal，预算为 ${calPlan} kcal。`
+  if (calIn > calPlan * 1.1) {
+    summary += ' 今日摄入偏高，建议晚餐减少油脂和精制主食。'
+  } else if (calIn < calPlan * 0.75) {
+    summary += ' 今日摄入偏低，注意补充优质蛋白与蔬菜，避免过度节食。'
+  } else {
+    summary += ' 今日热量控制较稳，保持当前节奏即可。'
+  }
+
+  const nutrition = [
+    `热量情况：已摄入 ${calIn} kcal，剩余 ${calRemain} kcal。`,
+    `蛋白质：${toInt(dayTotals.value.protein)} / ${toInt(plan.value.protein)} g（${proteinStatus}）。`,
+    `脂肪：${toInt(dayTotals.value.fat)} / ${toInt(plan.value.fat)} g（${fatStatus}）。`,
+    `碳水：${toInt(dayTotals.value.carbs)} / ${toInt(plan.value.carbs)} g（${carbStatus}）。`
+  ]
+
+  const suggestions = []
+  if (proteinStatus !== '达标') {
+    suggestions.push('每餐加入一掌心优质蛋白（鸡胸、鱼虾、鸡蛋、豆腐），优先把蛋白补齐。')
+  }
+  if (fatStatus === '偏高') {
+    suggestions.push('减少油炸与重油烹饪，改用清蒸、炖煮或空气炸锅，控制隐藏油脂。')
+  }
+  if (carbStatus === '偏高') {
+    suggestions.push('主食替换为全谷物或薯类，晚餐主食减半并搭配高纤蔬菜。')
+  }
+  if (calRemain > 0 && suggestions.length < 3) {
+    suggestions.push('你还有热量余量，优先补充蔬菜与蛋白，避免用零食填充。')
+  }
+  if (suggestions.length === 0) {
+    suggestions.push('宏量营养分配较平衡，继续维持当前餐盘结构与进食节奏。')
+  }
+
+  return { summary, nutrition, suggestions }
+})
+
+const fatLossTips = [
+  '进食顺序可用“蔬菜→蛋白→主食”，更容易提升饱腹感并减少总热量。',
+  '每天保证 7 小时以上睡眠，睡眠不足会增加食欲并影响减脂效率。',
+  '每周至少做 2 次抗阻训练，帮助保留肌肉，提高基础代谢。'
+]
 
 const loadProfile = async () => {
   if (!userId) return
@@ -591,5 +676,75 @@ onMounted(async () => {
 @media (max-width: 1100px) {
   .ring-grid { grid-template-columns: 1fr; }
   .center-row { grid-template-columns: 1fr; }
+}
+
+.ai-board {
+  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #e9edf3;
+  border-radius: 18px;
+  box-shadow: 0 8px 30px rgba(16, 24, 40, .05);
+  padding: 18px;
+}
+
+.ai-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-board-head h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #2c3348;
+}
+
+.ai-board-head span {
+  font-size: 12px;
+  color: #768294;
+}
+
+.ai-summary {
+  margin: 10px 0 12px;
+  color: #4f5d70;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-col {
+  border: 1px solid #edf1f5;
+  border-radius: 12px;
+  background: #fafbfd;
+  padding: 10px 12px;
+}
+
+.ai-col h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #2f3a4e;
+}
+
+.ai-col ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.ai-col li {
+  font-size: 13px;
+  color: #5d6878;
+  line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  .ai-grid { grid-template-columns: 1fr; }
 }
 </style>
