@@ -4,7 +4,7 @@ from .views import (
     RecipeDetailView, MealEventView, FoodSearchView, DietLogView,
     NutritionSummaryView, RecommendMealsView, FavoriteIngredientsView,
     SimilarIngredientView, FoodConflictView, UserCollectionView, ChatHistoryView,
-    IngredientDetailView, AdminAuthView, AdminOverviewView, AdminDataImportView,
+    IngredientDetailView, RecipeFullDetailView, AdminAuthView, AdminOverviewView, AdminDataImportView,
     AdminImportPreviewView, AdminImportTaskListView, AdminImportRollbackView,
     AdminDataQualityView, AdminDataQualityFixView, AdminUserAuditView
 )
@@ -26,6 +26,7 @@ urlpatterns = [
     path('recipe/', RecipeDetailView.as_view(), name='recipe'),
     path('meal-event/', MealEventView.as_view(), name='meal_event'),
     path('food-search/', FoodSearchView.as_view(), name='food_search'),
+    path('recipe-detail/', RecipeFullDetailView.as_view(), name='recipe_detail'),
     path('ingredient-detail/', IngredientDetailView.as_view(), name='ingredient_detail'),
     path('diet-log/', DietLogView.as_view(), name='diet_log'),
     path('nutrition-summary/', NutritionSummaryView.as_view(), name='nutrition_summary'),

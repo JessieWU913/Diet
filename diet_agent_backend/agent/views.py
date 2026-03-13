@@ -1758,6 +1758,123 @@ class IngredientDetailView(APIView):
             return Response({"error": str(e)}, status=500)
 
 
+class RecipeFullDetailView(APIView):
+    """菜谱详情查询：完整属性 + 营养细节 + 配料明细 + 步骤"""
+    def get(self, request):
+        name = request.query_params.get("name", "").strip()
+        if not name:
+            return Response({"error": "请输入菜谱名"}, status=400)
+
+        recipe_cypher = """
+        MATCH (r:Recipe)
+        WHERE toLower(r.name) = toLower($name)
+           OR toLower(r.name) CONTAINS toLower($name)
+           OR toLower($name) CONTAINS toLower(r.name)
+        RETURN r.name AS name, properties(r) AS props
+        ORDER BY CASE WHEN toLower(r.name) = toLower($name) THEN 0 ELSE 1 END, size(r.name) ASC
+        LIMIT 1
+        """
+
+        contains_cypher = """
+        MATCH (r:Recipe {name: $name})-[rel:CONTAINS]->(i:Ingredient)
+        RETURN i.name AS ingredient_name,
+               rel.weight_g AS weight_g,
+               rel.raw_text AS raw_text,
+               rel.is_linked AS is_linked
+        ORDER BY coalesce(rel.weight_g, 0) DESC
+        LIMIT 400
+        """
+
+        try:
+            recipe_result = graph_db.query(recipe_cypher, {"name": name})
+            if not recipe_result:
+                return Response({"error": "未找到该菜谱"}, status=404)
+
+            item = recipe_result[0]
+            recipe_name = item.get("name")
+            props = item.get("props") or {}
+
+            nutrients_detail = {}
+            nutrients_raw = props.get("nutrients_raw")
+            if nutrients_raw:
+                try:
+                    parsed = json.loads(nutrients_raw)
+                    if isinstance(parsed, dict):
+                        nutrients_detail = parsed
+                except Exception:
+                    nutrients_detail = {"raw_text": str(nutrients_raw)}
+
+            ingredients_detail = []
+            ingredients_raw = props.get("ingredients_raw")
+            if ingredients_raw:
+                try:
+                    parsed = json.loads(ingredients_raw)
+                    if isinstance(parsed, list):
+                        ingredients_detail = parsed
+                except Exception:
+                    ingredients_detail = [{"raw_text": str(ingredients_raw)}]
+
+            # If raw field is absent or empty, fallback to graph relations.
+            contains_rows = graph_db.query(contains_cypher, {"name": recipe_name})
+            if (not ingredients_detail) and contains_rows:
+                ingredients_detail = [
+                    {
+                        "ingredient_name": r.get("ingredient_name"),
+                        "weight_g": r.get("weight_g"),
+                        "raw_text": r.get("raw_text"),
+                        "is_linked": r.get("is_linked"),
+                    }
+                    for r in contains_rows
+                ]
+
+            steps_detail = []
+            steps_raw = props.get("steps")
+            if steps_raw:
+                if isinstance(steps_raw, list):
+                    steps_detail = [str(s).strip() for s in steps_raw if str(s).strip()]
+                else:
+                    text = str(steps_raw).strip()
+                    try:
+                        parsed = json.loads(text)
+                        if isinstance(parsed, list):
+                            steps_detail = [str(s).strip() for s in parsed if str(s).strip()]
+                        else:
+                            steps_detail = [line.strip() for line in text.split("\n") if line.strip()]
+                    except Exception:
+                        steps_detail = [line.strip() for line in text.split("\n") if line.strip()]
+
+            cleaned_props = {}
+            for k, v in props.items():
+                if v is None:
+                    continue
+                if isinstance(v, str) and len(v.strip()) == 0:
+                    continue
+                if k in {"embedding", "vector", "feature_vector"}:
+                    continue
+                cleaned_props[k] = _to_json_safe(v)
+
+            return Response({
+                "status": "success",
+                "data": {
+                    "name": recipe_name,
+                    "query_type": "recipe",
+                    "all_properties": cleaned_props,
+                    "nutrients_detail": _to_json_safe(nutrients_detail),
+                    "ingredients_detail": _to_json_safe(ingredients_detail),
+                    "steps_detail": _to_json_safe(steps_detail),
+                    "contains_relations": _to_json_safe(contains_rows),
+                    "relations": {
+                        "complements": [],
+                        "conflicts": [],
+                        "overlaps": [],
+                        "all": [],
+                    },
+                }
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
 class DietLogView(APIView):
     """饮食记录：记录/查询用户每日摄入"""
     def post(self, request):

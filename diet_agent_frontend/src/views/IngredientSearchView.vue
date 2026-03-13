@@ -1,26 +1,30 @@
 <template>
   <div class="ingredient-search-view">
     <div class="page-header">
-      <h2>食材具体查询</h2>
-      <p>输入食材名称，查看完整营养信息与互补/互斥/重叠关系。</p>
+      <h2>{{ queryType === 'ingredient' ? '食材具体查询' : '菜谱具体查询' }}</h2>
+      <p>{{ queryType === 'ingredient' ? '输入食材名称，查看完整营养信息与互补/互斥/重叠关系。' : '输入菜谱名称，查看完整属性、营养、配料与步骤信息。' }}</p>
     </div>
 
     <div class="search-bar">
+      <select v-model="queryType" class="type-select" :disabled="loading">
+        <option value="ingredient">食材</option>
+        <option value="recipe">菜谱</option>
+      </select>
       <div class="autocomplete-wrap">
         <input
           v-model="keyword"
-          @keyup.enter="searchIngredient"
+          @keyup.enter="searchCurrent"
           @focus="showSuggestions = true"
           @blur="hideSuggestionsWithDelay"
-          placeholder="例如：菠菜、鸡蛋、三文鱼"
+          :placeholder="queryType === 'ingredient' ? '例如：菠菜、鸡蛋、三文鱼' : '例如：番茄鸡蛋汤、青椒肉丝'"
           :disabled="loading"
         />
         <div v-if="showSuggestions && suggestions.length > 0" class="search-results">
           <button
             v-for="item in suggestions"
-            :key="item.name"
+            :key="`${item.type}-${item.name}`"
             class="search-item"
-            @mousedown.prevent="selectSuggestion(item.name)"
+            @mousedown.prevent="selectSuggestion(item)"
           >
             <span class="si-name" v-html="highlightMatch(item.name, keyword)"></span>
             <span class="si-right">
@@ -30,7 +34,7 @@
           </button>
         </div>
       </div>
-      <button class="query-btn" @click="searchIngredient" :disabled="loading || !keyword.trim()">
+      <button class="query-btn" @click="searchCurrent" :disabled="loading || !keyword.trim()">
         {{ loading ? '查询中...' : '查询' }}
       </button>
     </div>
@@ -113,7 +117,7 @@
         </div>
       </section>
 
-      <section class="relation-grid">
+      <section v-if="isIngredientResult" class="relation-grid">
         <div class="card">
           <h4>互补食材</h4>
           <div v-if="result.relations.complements.length === 0" class="empty">暂无数据</div>
@@ -148,7 +152,7 @@
         </div>
       </section>
 
-      <section class="card">
+      <section v-if="isIngredientResult" class="card">
         <h4>全部关系明细</h4>
         <div v-if="result.relations.all.length === 0" class="empty">暂无关系数据</div>
         <table v-else class="rel-table">
@@ -170,6 +174,37 @@
           </tbody>
         </table>
       </section>
+
+      <section v-if="isRecipeResult" class="card">
+        <h4>配料明细</h4>
+        <div v-if="recipeIngredientRows.length === 0" class="empty">暂无配料数据</div>
+        <table v-else class="rel-table">
+          <thead>
+            <tr>
+              <th>食材名</th>
+              <th>重量(g)</th>
+              <th>原始文本</th>
+              <th>已结构化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, idx) in recipeIngredientRows" :key="`ri-${idx}`">
+              <td>{{ r.ingredient_name || r.name || '—' }}</td>
+              <td>{{ r.weight_g ?? '—' }}</td>
+              <td>{{ r.raw_text || '—' }}</td>
+              <td>{{ r.is_linked === true ? '是' : (r.is_linked === false ? '否' : '—') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="isRecipeResult" class="card">
+        <h4>制作步骤</h4>
+        <div v-if="recipeSteps.length === 0" class="empty">暂无步骤数据</div>
+        <ol v-else class="rel-list">
+          <li v-for="(step, idx) in recipeSteps" :key="`step-${idx}`">{{ step }}</li>
+        </ol>
+      </section>
     </div>
   </div>
 </template>
@@ -179,6 +214,7 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import API from '../api.js'
 
 const keyword = ref('')
+const queryType = ref('ingredient')
 const loading = ref(false)
 const errorText = ref('')
 const result = ref(null)
@@ -325,6 +361,23 @@ const nutrientEntries = computed(() => {
 
 const mergedEntries = computed(() => {
   return [...propertyEntries.value, ...nutrientEntries.value]
+})
+
+const isRecipeResult = computed(() => result.value?.query_type === 'recipe')
+const isIngredientResult = computed(() => !isRecipeResult.value)
+
+const recipeIngredientRows = computed(() => {
+  if (!isRecipeResult.value) return []
+  const rows = result.value?.contains_relations
+  if (Array.isArray(rows) && rows.length > 0) return rows
+  const rawRows = result.value?.ingredients_detail
+  return Array.isArray(rawRows) ? rawRows : []
+})
+
+const recipeSteps = computed(() => {
+  if (!isRecipeResult.value) return []
+  const rows = result.value?.steps_detail
+  return Array.isArray(rows) ? rows.filter((x) => String(x || '').trim()) : []
 })
 
 const relationDesc = (r) => r.reason || r.relation_type
@@ -588,7 +641,8 @@ const fetchSuggestions = async (q) => {
       const name = (row.name || '').trim()
       if (!name) return
       const type = row.type || 'Unknown'
-      if (type !== 'Ingredient') return
+      if (queryType.value === 'ingredient' && type !== 'Ingredient') return
+      if (queryType.value === 'recipe' && type !== 'Recipe') return
       if (!uniq.has(name)) {
         uniq.set(name, { name, type, calories: row.calories })
       }
@@ -607,10 +661,17 @@ watch(keyword, (val) => {
   }, 250)
 })
 
-const selectSuggestion = (name) => {
-  keyword.value = name
+watch(queryType, () => {
   showSuggestions.value = false
-  searchIngredient()
+  suggestions.value = []
+  result.value = null
+  errorText.value = ''
+})
+
+const selectSuggestion = (item) => {
+  keyword.value = item?.name || ''
+  showSuggestions.value = false
+  searchCurrent()
 }
 
 const hideSuggestionsWithDelay = () => {
@@ -619,7 +680,7 @@ const hideSuggestionsWithDelay = () => {
   }, 120)
 }
 
-const searchIngredient = async () => {
+const searchCurrent = async () => {
   const q = keyword.value.trim()
   if (!q || loading.value) return
 
@@ -629,7 +690,8 @@ const searchIngredient = async () => {
   result.value = null
 
   try {
-    const res = await API.get(`/ingredient-detail/?name=${encodeURIComponent(q)}`)
+    const endpoint = queryType.value === 'recipe' ? '/recipe-detail/' : '/ingredient-detail/'
+    const res = await API.get(`${endpoint}?name=${encodeURIComponent(q)}`)
     result.value = res.data.data
   } catch (e) {
     errorText.value = e?.response?.data?.error || '查询失败，请稍后重试'
@@ -660,6 +722,17 @@ onBeforeUnmount(() => {
 
 .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
 .autocomplete-wrap { position: relative; flex: 1; }
+.type-select {
+  border: 2px solid #dfe6e9;
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 15px;
+  background: #fff;
+  color: #2d3436;
+  min-width: 92px;
+  outline: none;
+}
+.type-select:focus { border-color: #7761e5; }
 .search-bar input {
   width: 100%;
   border: 2px solid #dfe6e9;
