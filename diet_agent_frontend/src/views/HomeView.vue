@@ -40,13 +40,10 @@
     </section>
 
     <section class="nav-board">
-      <div class="nb-head">
-      </div>
       <div class="nb-grid">
         <article class="nb-card" v-for="item in navPanels" :key="item.path">
           <div class="nb-top">
             <h4>{{ item.title }}</h4>
-            <span class="nb-tag">{{ item.tag }}</span>
           </div>
           <p class="nb-desc">{{ item.desc }}</p>
           <button class="nb-btn" @click="go(item.path)">进入 {{ item.title }}</button>
@@ -110,14 +107,14 @@ const ringStyle = computed(() => {
 })
 
 const navPanels = computed(() => [
-  { path: '/home', title: '主页', tag: '总览', desc: '查看当前减重进度、阶段周数与体重里程碑。' },
-  { path: '/diet-log', title: '饮食记录', tag: '记录', desc: '按日期登记三餐与加餐，形成可追踪的摄入轨迹。' },
-  { path: '/recipes', title: '食谱推荐', tag: '推荐', desc: '基于目标与偏好获取菜谱，支持导出到每日计划。' },
-  { path: '/stats', title: '健康管理', tag: '分析', desc: '查看预算、营养分配、运动消耗与 AI 智能分析建议。' },
-  { path: '/chat', title: 'AI 助手', tag: '问答', desc: '和 AI 对话获取实时饮食建议、替代方案和计划调整。' },
-  { path: '/ingredient-search', title: '饮食查询', tag: '查询', desc: '查询食材营养、关系与搭配，快速做出更优选择。' },
-  { path: '/health-log', title: '健康日志', tag: '追踪', desc: '记录体感、状态和习惯，帮助识别减脂中的关键变量。' },
-  { path: '/favorites', title: '收藏夹', tag: '沉淀', desc: '沉淀高频菜谱与食材替换方案，形成个人饮食资产。' },
+  { path: '/home', title: '主页', desc: '查看当前减重进度、阶段周数与体重里程碑。' },
+  { path: '/diet-log', title: '饮食记录', desc: '按日期登记三餐与加餐，形成可追踪的摄入轨迹。' },
+  { path: '/recipes', title: '食谱推荐', desc: '基于目标与偏好获取菜谱，支持导出到每日计划。' },
+  { path: '/stats', title: '健康管理', desc: '查看预算、营养分配、运动消耗与 AI 智能分析建议。' },
+  { path: '/chat', title: 'AI 助手', desc: '和 AI 对话获取实时饮食建议、替代方案和计划调整。' },
+  { path: '/ingredient-search', title: '饮食查询', desc: '查询食材营养、关系与搭配，快速做出更优选择。' },
+  { path: '/health-log', title: '健康日志', desc: '记录体感、状态和习惯，帮助识别减脂中的关键变量。' },
+  { path: '/favorites', title: '收藏夹', desc: '沉淀高频菜谱与食材替换方案，形成个人饮食资产。' },
 ])
 
 const go = (path) => {
@@ -223,25 +220,6 @@ onMounted(() => {
   padding: 22px;
 }
 
-.nb-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.nb-head h3 {
-  margin: 0;
-  font-size: 20px;
-  color: #2e344d;
-}
-
-.nb-head p {
-  margin: 0;
-  font-size: 13px;
-  color: #8893a1;
-}
-
 .nb-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -270,15 +248,6 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   color: #2e344d;
-}
-
-.nb-tag {
-  font-size: 11px;
-  color: #51627a;
-  background: #eaf1ff;
-  border-radius: 999px;
-  padding: 3px 8px;
-  white-space: nowrap;
 }
 
 .nb-desc {

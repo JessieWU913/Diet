@@ -11,20 +11,29 @@
     <div class="filter-bar">
       <div class="filter-item">
         <label>热量上限</label>
-        <input type="number" v-model.number="filters.maxCalories" placeholder="700" />
-        <span class="unit">kcal</span>
+        <div class="input-wrap">
+          <input type="number" v-model.number="filters.maxCalories" placeholder="700" />
+          <span class="unit">kcal</span>
+        </div>
       </div>
       <div class="filter-item">
         <label>蛋白质下限</label>
-        <input type="number" v-model.number="filters.minProtein" placeholder="0" />
-        <span class="unit">g</span>
+        <div class="input-wrap">
+          <input type="number" v-model.number="filters.minProtein" placeholder="0" />
+          <span class="unit">g</span>
+        </div>
       </div>
       <div class="filter-item">
         <label>脂肪上限</label>
-        <input type="number" v-model.number="filters.maxFat" placeholder="50" />
-        <span class="unit">g</span>
+        <div class="input-wrap">
+          <input type="number" v-model.number="filters.maxFat" placeholder="50" />
+          <span class="unit">g</span>
+        </div>
       </div>
-      <button class="apply-btn" @click="applyFilters">应用筛选</button>
+      <div class="filter-action">
+        <button class="reset-btn" @click="resetFilters">Reset</button>
+        <button class="apply-btn" @click="applyFilters">Apply Filters</button>
+      </div>
     </div>
 
     <!-- 三餐推荐 -->
@@ -32,14 +41,17 @@
     <div v-else class="meals-grid">
       <div v-for="section in mealSections" :key="section.key" class="meal-column">
         <div class="mc-header">
-          <span class="mc-icon">{{ section.icon }}</span>
+          <component :is="section.icon" class="mc-icon" :size="20" :stroke-width="1.9" />
           <span class="mc-title">{{ section.label }}</span>
         </div>
         <div v-if="!recommendations[section.key] || recommendations[section.key].length === 0" class="mc-empty">
           暂无推荐
         </div>
         <div v-for="recipe in getFilteredRecipes(section.key)" :key="recipe.name" class="recipe-card">
-          <div class="rc-name">{{ recipe.name }}</div>
+          <div class="rc-head">
+            <div class="rc-name">{{ recipe.name }}</div>
+            <span class="recipe-kind">{{ recipe.category || '未分类' }}</span>
+          </div>
           <div class="rc-macros">
             <span class="macro cal">热量 {{ recipe.calories || '—' }} kcal</span>
             <span class="macro protein">蛋白 {{ recipe.protein || '—' }}g</span>
@@ -118,6 +130,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { Coffee, Soup, MoonStar } from 'lucide-vue-next'
 import API from '../api.js'
 import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
@@ -131,9 +144,9 @@ const detailData = ref(null)
 const filters = reactive({ maxCalories: 700, minProtein: 0, maxFat: 50 })
 
 const mealSections = [
-  { key: 'breakfast', label: '早餐', icon: '早' },
-  { key: 'lunch', label: '午餐', icon: '中' },
-  { key: 'dinner', label: '晚餐', icon: '晚' },
+  { key: 'breakfast', label: '早餐', icon: Coffee },
+  { key: 'lunch', label: '午餐', icon: Soup },
+  { key: 'dinner', label: '晚餐', icon: MoonStar },
 ]
 
 // 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
@@ -209,6 +222,12 @@ const getMealTotalCalories = (mealKey) => {
 }
 
 const applyFilters = () => { /* reactive filters auto-apply */ }
+
+const resetFilters = () => {
+  filters.maxCalories = 700
+  filters.minProtein = 0
+  filters.maxFat = 50
+}
 
 const addToDietLog = async (recipe, mealType) => {
   try {
@@ -306,24 +325,82 @@ onMounted(() => {
 .refresh-btn:hover { background: #6350d0; }
 .refresh-btn:disabled { background: #95a5a6; }
 
-.filter-bar { display: flex; align-items: flex-end; gap: 16px; background: #fff; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.04); flex-wrap: wrap; }
-.filter-item { display: flex; flex-direction: column; gap: 4px; }
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 14px;
+  background: #fff;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.filter-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .filter-item label { font-size: 12px; color: #636e72; font-weight: 600; }
-.filter-item input { width: 90px; padding: 8px 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 14px; }
-.unit { font-size: 12px; color: #b2bec3; }
-.apply-btn { padding: 8px 16px; background: #f0f4f8; border: 1px solid #dfe6e9; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.input-wrap { position: relative; }
+.filter-item input {
+  width: 100%;
+  padding: 9px 40px 9px 10px;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.unit {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #94a1b0;
+}
+.filter-action { display: flex; justify-content: flex-end; gap: 8px; }
+.reset-btn,
+.apply-btn {
+  padding: 9px 16px;
+  border: 1px solid #dfe6e9;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.apply-btn {
+  min-width: 132px;
+  background: #f0f4f8;
+}
+
+.reset-btn {
+  min-width: 100px;
+  background: #fff;
+}
+
+.reset-btn:hover,
+.apply-btn:hover {
+  background: #eaf0f6;
+}
 
 .loading-state { text-align: center; padding: 60px; color: #636e72; font-size: 16px; }
 
 .meals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .meal-column { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 .mc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f2f5; }
-.mc-icon { font-size: 22px; }
+.mc-icon { color: #2d3436; flex: 0 0 auto; }
 .mc-title { font-size: 17px; font-weight: 700; color: #2d3436; }
 .mc-empty { color: #b2bec3; font-size: 14px; text-align: center; padding: 20px 0; }
 
 .recipe-card { padding: 14px 0; border-bottom: 1px solid #f8f9fa; }
-.rc-name { font-weight: 600; color: #2d3436; font-size: 15px; margin-bottom: 8px; }
+.rc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.rc-name { font-weight: 600; color: #2d3436; font-size: 15px; margin-bottom: 0; }
+.recipe-kind {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: #4f5f76;
+  background: #eef3fb;
+  border: 1px solid #d8e2f1;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
 .rc-macros { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .macro { font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #f8f9fa; color: #636e72; }
 .rc-actions { display: flex; gap: 6px; }
@@ -392,5 +469,17 @@ onMounted(() => {
   background: #fff4d6;
   color: #9a5d00;
   font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-action { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (max-width: 700px) {
+  .filter-bar { grid-template-columns: 1fr; }
+  .filter-action { justify-content: stretch; }
+  .reset-btn,
+  .apply-btn { width: 100%; }
 }
 </style>

@@ -2216,7 +2216,8 @@ class RecommendMealsView(APIView):
         WITH n, rand() AS r
         ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
-               n.protein AS protein, n.fat AS fat, n.carbs AS carbs
+             n.protein AS protein, n.fat AS fat, n.carbs AS carbs,
+             coalesce(n.category, '未分类') AS category
         LIMIT 3
         """
 
@@ -2227,7 +2228,8 @@ class RecommendMealsView(APIView):
         WITH n, rand() AS r
         ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
-               n.protein AS protein, n.fat AS fat, n.carbs AS carbs
+             n.protein AS protein, n.fat AS fat, n.carbs AS carbs,
+             coalesce(n.category, '未分类') AS category
         LIMIT 4
         """
 
@@ -2238,7 +2240,8 @@ class RecommendMealsView(APIView):
         WITH n, rand() AS r
         ORDER BY r
         RETURN n.name AS name, n.calories AS calories,
-               n.protein AS protein, n.fat AS fat, n.carbs AS carbs
+             n.protein AS protein, n.fat AS fat, n.carbs AS carbs,
+             coalesce(n.category, '未分类') AS category
         LIMIT 3
         """
         try:
@@ -2462,8 +2465,8 @@ class ChatHistoryView(APIView):
         cypher = """
         MATCH (u:User {id: $user_id})-[:HAS_CHAT]->(s:ChatSession)
         OPTIONAL MATCH (s)-[:HAS_MSG]->(m:ChatMessage)
-        WITH s, m ORDER BY m.timestamp ASC
-        WITH s, collect({role: m.role, content: m.content, timestamp: m.timestamp}) AS msgs
+         WITH s, m ORDER BY coalesce(m.idx, 0) ASC, m.timestamp ASC
+         WITH s, [x IN collect({role: m.role, content: m.content, timestamp: m.timestamp, idx: m.idx}) WHERE x.role IS NOT NULL] AS msgs
         RETURN s.id AS session_id, s.title AS title,
                s.created_at AS created_at, msgs
         ORDER BY s.created_at DESC
