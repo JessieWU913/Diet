@@ -185,6 +185,7 @@
               <th>重量(g)</th>
               <th>原始文本</th>
               <th>已结构化</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -193,6 +194,15 @@
               <td>{{ r.weight_g ?? '—' }}</td>
               <td>{{ r.raw_text || '—' }}</td>
               <td>{{ r.is_linked === true ? '是' : (r.is_linked === false ? '否' : '—') }}</td>
+              <td>
+                <button
+                  class="ing-jump-btn"
+                  :disabled="!(r.ingredient_name || r.name)"
+                  @click="jumpToIngredient(r.ingredient_name || r.name)"
+                >
+                  查食材详情
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -201,9 +211,7 @@
       <section v-if="isRecipeResult" class="card">
         <h4>制作步骤</h4>
         <div v-if="recipeSteps.length === 0" class="empty">暂无步骤数据</div>
-        <ol v-else class="rel-list">
-          <li v-for="(step, idx) in recipeSteps" :key="`step-${idx}`">{{ step }}</li>
-        </ol>
+        <div v-else class="steps-content" v-html="formattedRecipeSteps"></div>
       </section>
     </div>
   </div>
@@ -212,6 +220,7 @@
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import API from '../api.js'
+import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
 const keyword = ref('')
 const queryType = ref('ingredient')
@@ -378,6 +387,10 @@ const recipeSteps = computed(() => {
   if (!isRecipeResult.value) return []
   const rows = result.value?.steps_detail
   return Array.isArray(rows) ? rows.filter((x) => String(x || '').trim()) : []
+})
+
+const formattedRecipeSteps = computed(() => {
+  return formatRecipeStepsHtml(recipeSteps.value)
 })
 
 const relationDesc = (r) => r.reason || r.relation_type
@@ -678,6 +691,14 @@ const hideSuggestionsWithDelay = () => {
   setTimeout(() => {
     showSuggestions.value = false
   }, 120)
+}
+
+const jumpToIngredient = (name) => {
+  const n = String(name || '').trim()
+  if (!n) return
+  queryType.value = 'ingredient'
+  keyword.value = n
+  searchCurrent()
 }
 
 const searchCurrent = async () => {
@@ -1071,6 +1092,46 @@ onBeforeUnmount(() => {
   vertical-align: top;
 }
 .rel-table th { color: #60707d; font-weight: 600; }
+
+.ing-jump-btn {
+  border: 1px solid #d8dbe6;
+  background: #fff;
+  color: #4b5b6b;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ing-jump-btn:hover { background: #eef6ff; border-color: #9ec6ff; color: #1f6fcb; }
+.ing-jump-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.steps-content :deep(.recipe-steps-list) { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.steps-content :deep(.recipe-step-item) { display: flex; align-items: flex-start; gap: 10px; }
+.steps-content :deep(.step-index) {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #efe8ff;
+  border: 1px solid #d6c5ff;
+  color: #5e46c8;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  margin-top: 2px;
+}
+.steps-content :deep(.step-text) { color: #2d3436; line-height: 1.72; font-size: 14px; }
+.steps-content :deep(.step-verb) {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff4d6;
+  color: #9a5d00;
+  font-weight: 700;
+}
 
 .empty { color: #95a5a6; font-size: 13px; }
 

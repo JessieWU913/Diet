@@ -154,7 +154,13 @@ const loadChatHistory = async () => {
   if (!userId) return
   try {
     const res = await API.get(`/chat-history/?user_id=${userId}`)
-    chatSessions.value = (res.data.sessions || []).map(s => ({ ...s, expanded: false }))
+    const sessions = (res.data.sessions || []).map(s => ({ ...s, expanded: false }))
+    sessions.sort((a, b) => {
+      const ta = new Date(a.created_at || 0).getTime()
+      const tb = new Date(b.created_at || 0).getTime()
+      return ta - tb
+    })
+    chatSessions.value = sessions
   } catch (e) { console.error(e) }
 }
 

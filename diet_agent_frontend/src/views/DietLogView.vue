@@ -154,6 +154,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import API from '../api.js'
+import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
 const userId = localStorage.getItem('user_id') || ''
 const selectedDate = ref(new Date().toISOString().split('T')[0])
@@ -256,12 +257,7 @@ const formatIngredients = (raw) => {
 }
 
 const formatSteps = (raw) => {
-  if (!raw) return ''
-  try {
-    const arr = JSON.parse(raw)
-    if (Array.isArray(arr)) return '<ol>' + arr.map(s => `<li>${s}</li>`).join('') + '</ol>'
-    return raw
-  } catch { return raw.replace(/\n/g, '<br>') }
+  return formatRecipeStepsHtml(raw)
 }
 
 const deleteLog = async (logId) => {
@@ -379,6 +375,31 @@ onMounted(() => loadLogs())
 .dm-section h4 { font-size: 15px; color: #2d3436; margin-bottom: 10px; }
 .dm-loading, .dm-empty { text-align: center; padding: 20px; color: #b2bec3; }
 .dm-content :deep(.ing-tag) { display: inline-block; background: #ede9fc; color: #7761e5; padding: 3px 10px; border-radius: 12px; margin: 2px 4px; font-size: 13px; }
-.dm-content :deep(ol) { padding-left: 20px; }
-.dm-content :deep(li) { margin-bottom: 8px; color: #2d3436; line-height: 1.6; }
+.dm-content :deep(.recipe-steps-list) { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dm-content :deep(.recipe-step-item) { display: flex; align-items: flex-start; gap: 10px; }
+.dm-content :deep(.step-index) {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #efe8ff;
+  border: 1px solid #d6c5ff;
+  color: #5e46c8;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  margin-top: 2px;
+}
+.dm-content :deep(.step-text) { color: #2d3436; line-height: 1.72; font-size: 14px; }
+.dm-content :deep(.step-verb) {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff4d6;
+  color: #9a5d00;
+  font-weight: 700;
+}
 </style>

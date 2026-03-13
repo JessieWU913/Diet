@@ -125,6 +125,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import API from '../api.js'
+import { formatRecipeStepsHtml } from '../utils/recipeStepFormatter.js'
 
 const userId = localStorage.getItem('user_id') || ''
 const loading = ref(false)
@@ -413,14 +414,7 @@ const formatIngredients = (raw) => {
 
 // 格式化步骤
 const formatSteps = (raw) => {
-  if (!raw) return ''
-  try {
-    const arr = JSON.parse(raw)
-    if (Array.isArray(arr)) return '<ol>' + arr.map(s => `<li>${s}</li>`).join('') + '</ol>'
-    return raw
-  } catch {
-    return raw.replace(/\n/g, '<br>')
-  }
+  return formatRecipeStepsHtml(raw)
 }
 
 onMounted(() => loadCollections())
@@ -488,8 +482,33 @@ onMounted(() => loadCollections())
 .dm-loading { text-align: center; padding: 30px; color: #b2bec3; }
 .dm-empty { text-align: center; padding: 20px; color: #b2bec3; font-size: 14px; }
 .ing-tags :deep(.ing-tag) { display: inline-block; background: #ede9fc; color: #7761e5; padding: 4px 12px; border-radius: 12px; margin: 3px 4px; font-size: 13px; }
-.steps-content :deep(ol) { padding-left: 20px; }
-.steps-content :deep(li) { margin-bottom: 10px; color: #2d3436; line-height: 1.7; font-size: 14px; }
+.steps-content :deep(.recipe-steps-list) { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.steps-content :deep(.recipe-step-item) { display: flex; align-items: flex-start; gap: 10px; }
+.steps-content :deep(.step-index) {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #efe8ff;
+  border: 1px solid #d6c5ff;
+  color: #5e46c8;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  margin-top: 2px;
+}
+.steps-content :deep(.step-text) { color: #2d3436; line-height: 1.72; font-size: 14px; }
+.steps-content :deep(.step-verb) {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff4d6;
+  color: #9a5d00;
+  font-weight: 700;
+}
 
 /* 购物清单弹窗 */
 .shopping-modal { background: #fff; width: 460px; max-height: 75vh; overflow-y: auto; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
