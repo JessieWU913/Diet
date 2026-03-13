@@ -337,9 +337,14 @@ const propertyEntries = computed(() => {
   if (!result.value || !result.value.all_properties) return []
   const props = result.value.all_properties
   const hiddenKeys = new Set(['nutrients_raw', 'calories', 'protein', 'fat', 'carbs', 'fiber'])
+  const recipeHiddenKeys = new Set(['image', 'ingredients_raw', 'raw_json', 'steps', 'steps_raw'])
 
   const entries = Object.entries(props)
-    .filter(([key]) => !hiddenKeys.has(key))
+    .filter(([key]) => {
+      if (hiddenKeys.has(key)) return false
+      if (isRecipeResult.value && recipeHiddenKeys.has(key)) return false
+      return true
+    })
     .map(([key, value]) => {
       if (key === 'unit_info') {
         return { key: fieldLabelMap[key] || key, value: parseUnitInfo(value) }
@@ -1122,16 +1127,7 @@ onBeforeUnmount(() => {
   flex: 0 0 24px;
   margin-top: 2px;
 }
-.steps-content :deep(.step-text) { color: #2d3436; line-height: 1.72; font-size: 14px; }
-.steps-content :deep(.step-verb) {
-  display: inline-block;
-  margin: 0 2px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #fff4d6;
-  color: #9a5d00;
-  font-weight: 700;
-}
+.steps-content :deep(.step-text) { color: #46607a; line-height: 1.72; font-size: 14px; }
 
 .empty { color: #95a5a6; font-size: 13px; }
 

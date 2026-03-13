@@ -1,12 +1,3 @@
-const COOKING_VERBS = [
-  '焯水', '腌制', '勾芡', '收汁', '翻炒', '爆炒', '快炒', '慢炖', '炖煮', '煎至', '煎', '炸', '烤',
-  '蒸', '煮', '炒', '炖', '拌', '焖', '熬', '焗', '煸', '汆', '卤', '切', '洗', '泡', '浸泡', '剁', '拍',
-  '压', '捣', '加', '放入', '加入', '倒入', '淋入', '撒入', '搅拌', '搅匀', '翻匀', '搅打', '打散', '打发',
-  '调味', '腌', '冷藏', '静置', '小火', '中火', '大火', '转小火', '转中火', '加热', '预热', '出锅', '装盘'
-]
-
-const VERB_REG = new RegExp(`(${COOKING_VERBS.sort((a, b) => b.length - a.length).join('|')})`, 'g')
-
 const escapeHtml = (str) => {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -57,7 +48,7 @@ const splitToSteps = (raw) => {
 }
 
 const stylizeStepText = (line) => {
-  return escapeHtml(line).replace(VERB_REG, '<span class="step-verb">$1</span>')
+  return escapeHtml(line)
 }
 
 export const formatRecipeStepsHtml = (raw) => {

@@ -1731,12 +1731,21 @@ class IngredientDetailView(APIView):
                     overlaps.append(row)
 
             cleaned_props = {}
+            recipe_hidden_keys = {
+                "image",
+                "ingredients_raw",
+                "raw_json",
+                "steps",
+                "steps_raw",
+            }
             for k, v in props.items():
                 if v is None:
                     continue
                 if isinstance(v, str) and len(v.strip()) == 0:
                     continue
                 if k in {"embedding", "vector", "feature_vector"}:
+                    continue
+                if k in recipe_hidden_keys:
                     continue
                 cleaned_props[k] = _to_json_safe(v)
 

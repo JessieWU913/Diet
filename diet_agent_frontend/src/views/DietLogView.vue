@@ -135,13 +135,16 @@
           </div>
           <div v-if="detailLoading" class="dm-loading">加载详情中...</div>
           <div v-else-if="detailRecipe" class="dm-content">
-            <div v-if="detailRecipe.ingredients" class="dm-section">
+            <div v-if="!isBlankRecipeText(detailRecipe.ingredients)" class="dm-section">
               <h4>食材清单</h4>
               <div v-html="formatIngredients(detailRecipe.ingredients)"></div>
             </div>
-            <div v-if="detailRecipe.steps" class="dm-section">
+            <div v-if="!isBlankRecipeText(detailRecipe.steps)" class="dm-section">
               <h4>烹饪步骤</h4>
               <div v-html="formatSteps(detailRecipe.steps)"></div>
+            </div>
+            <div v-if="isBlankRecipeText(detailRecipe.ingredients) && isBlankRecipeText(detailRecipe.steps)" class="dm-empty">
+              暂无详细菜谱信息
             </div>
           </div>
           <div v-else class="dm-empty">暂无详细菜谱信息</div>
@@ -172,6 +175,13 @@ const showDetailModal = ref(false)
 const detailItem = ref({})
 const detailRecipe = ref(null)
 const detailLoading = ref(false)
+
+const isBlankRecipeText = (v) => {
+  if (v === null || v === undefined) return true
+  if (Array.isArray(v)) return v.length === 0
+  const s = String(v).trim()
+  return !s || s === '[]' || s === '{}' || s.toLowerCase() === 'null'
+}
 
 const mealSections = [
   { key: 'breakfast', label: '早餐', icon: '' },
@@ -242,7 +252,34 @@ const openDetailModal = async (log) => {
   try {
     const res = await API.post('/recipe/', { names: [log.food_name] })
     if (res.data.data?.length > 0) {
-      detailRecipe.value = res.data.data[0]
+      const r = res.data.data[0]
+      const hasText = !isBlankRecipeText(r?.ingredients) || !isBlankRecipeText(r?.steps)
+      if (hasText) {
+        detailRecipe.value = r
+      }
+    }
+
+    // 如果 recipe 接口返回为空/缺失，尝试使用 recipe-detail 兜底。
+    if (!detailRecipe.value) {
+      const fullRes = await API.get(`/recipe-detail/?name=${encodeURIComponent(log.food_name)}`)
+      const full = fullRes?.data?.data
+      if (full) {
+        const ingredients = Array.isArray(full.ingredients_detail)
+          ? JSON.stringify(full.ingredients_detail)
+          : ''
+        const steps = Array.isArray(full.steps_detail)
+          ? JSON.stringify(full.steps_detail)
+          : ''
+        detailRecipe.value = {
+          name: full.name || log.food_name,
+          calories: detailItem.value.calories,
+          protein: detailItem.value.protein,
+          fat: detailItem.value.fat,
+          carbs: detailItem.value.carbs,
+          ingredients,
+          steps
+        }
+      }
     }
   } catch (e) { console.error(e) }
   finally { detailLoading.value = false }
@@ -250,9 +287,15 @@ const openDetailModal = async (log) => {
 
 const formatIngredients = (raw) => {
   if (!raw) return ''
+  if (Array.isArray(raw)) {
+    return raw.map(i => `<span class="ing-tag">${(i?.raw_text || i?.ingredient_name || i?.name || i)}</span>`).join(' ')
+  }
   try {
     const arr = JSON.parse(raw)
-    return arr.map(i => `<span class="ing-tag">${i.raw_text || i}</span>`).join(' ')
+    if (Array.isArray(arr)) {
+      return arr.map(i => `<span class="ing-tag">${i?.raw_text || i?.ingredient_name || i?.name || i}</span>`).join(' ')
+    }
+    return String(raw)
   } catch { return raw }
 }
 
