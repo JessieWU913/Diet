@@ -1953,6 +1953,142 @@ class DietLogView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
+
+class ExerciseLogView(APIView):
+    """运动消耗记录：按日期记录与统计，支持 MET 自动估算"""
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        date_str = request.data.get("date", datetime.now().strftime("%Y-%m-%d"))
+        exercise_type = str(request.data.get("exercise_type", "运动")).strip() or "运动"
+        note = str(request.data.get("note", "")).strip()
+
+        try:
+            duration_minutes = float(request.data.get("duration_minutes") or 0)
+        except ValueError:
+            duration_minutes = 0.0
+
+        try:
+            met = float(request.data.get("met") or 0)
+        except ValueError:
+            met = 0.0
+
+        try:
+            calories = float(request.data.get("calories") or 0)
+        except ValueError:
+            calories = 0.0
+
+        if not user_id:
+            return Response({"error": "缺少 user_id"}, status=400)
+
+        if calories <= 0 and met > 0 and duration_minutes > 0:
+            weight_rows = graph_db.query(
+                "MATCH (u:User {id: $user_id}) RETURN coalesce(u.weight, 60) AS weight LIMIT 1",
+                {"user_id": user_id}
+            )
+            weight = float((weight_rows[0] if weight_rows else {}).get("weight", 60) or 60)
+            calories = met * weight * (duration_minutes / 60.0)
+
+        calories = max(0.0, calories)
+        duration_minutes = max(0.0, duration_minutes)
+        met = max(0.0, met)
+
+        log_id = str(uuid.uuid4())[:10]
+        cypher = """
+        MATCH (u:User {id: $user_id})
+        CREATE (log:ExerciseLog {
+            id: $log_id,
+            user_id: $user_id,
+            date: $date,
+            exercise_type: $exercise_type,
+            duration_minutes: $duration_minutes,
+            met: $met,
+            calories: $calories,
+            note: $note,
+            created_at: $created_at
+        })
+        MERGE (u)-[:HAS_EXERCISE_LOG]->(log)
+        RETURN log.id AS id
+        """
+        try:
+            graph_db.query(cypher, {
+                "log_id": log_id,
+                "user_id": user_id,
+                "date": date_str,
+                "exercise_type": exercise_type,
+                "duration_minutes": duration_minutes,
+                "met": met,
+                "calories": calories,
+                "note": note,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            return Response({"status": "success", "id": log_id, "calories": round(calories, 2)})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    def get(self, request):
+        user_id = request.query_params.get("user_id")
+        date_str = request.query_params.get("date")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        if not user_id:
+            return Response({"error": "缺少 user_id"}, status=400)
+
+        try:
+            if start_date and end_date:
+                cypher = """
+                MATCH (u:User {id: $user_id})-[:HAS_EXERCISE_LOG]->(log:ExerciseLog)
+                WHERE log.date >= $start_date AND log.date <= $end_date
+                RETURN log.id AS id,
+                       log.date AS date,
+                       log.exercise_type AS exercise_type,
+                       coalesce(log.duration_minutes, 0) AS duration_minutes,
+                       coalesce(log.met, 0) AS met,
+                       coalesce(log.calories, 0) AS calories,
+                       coalesce(log.note, '') AS note,
+                       coalesce(log.created_at, '') AS created_at
+                ORDER BY log.date DESC, log.created_at DESC
+                """
+                params = {"user_id": user_id, "start_date": start_date, "end_date": end_date}
+            else:
+                if not date_str:
+                    date_str = datetime.now().strftime("%Y-%m-%d")
+                cypher = """
+                MATCH (u:User {id: $user_id})-[:HAS_EXERCISE_LOG]->(log:ExerciseLog {date: $date})
+                RETURN log.id AS id,
+                       log.date AS date,
+                       log.exercise_type AS exercise_type,
+                       coalesce(log.duration_minutes, 0) AS duration_minutes,
+                       coalesce(log.met, 0) AS met,
+                       coalesce(log.calories, 0) AS calories,
+                       coalesce(log.note, '') AS note,
+                       coalesce(log.created_at, '') AS created_at
+                ORDER BY log.created_at DESC
+                """
+                params = {"user_id": user_id, "date": date_str}
+
+            rows = graph_db.query(cypher, params)
+            total = sum(float(r.get("calories") or 0) for r in rows)
+            return Response({"logs": rows, "total_calories": round(total, 2)})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    def delete(self, request):
+        user_id = request.query_params.get("user_id")
+        log_id = request.query_params.get("log_id")
+        if not user_id or not log_id:
+            return Response({"error": "缺少参数"}, status=400)
+
+        cypher = """
+        MATCH (u:User {id: $user_id})-[:HAS_EXERCISE_LOG]->(log:ExerciseLog {id: $log_id})
+        DETACH DELETE log
+        """
+        try:
+            graph_db.query(cypher, {"user_id": user_id, "log_id": log_id})
+            return Response({"status": "success"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
     def get(self, request):
         user_id = request.query_params.get("user_id")
         date_str = request.query_params.get("date")

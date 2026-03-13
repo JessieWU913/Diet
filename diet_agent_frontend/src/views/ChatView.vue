@@ -70,9 +70,22 @@
                   <path d="M2 3h4v12H2V3zm20 11c0 1.1-.9 2-2 2h-6.31l.95 4.57.03.32c0 .41-.17.79-.44 1.06L13 23l-6.41-6.41A1.996 1.996 0 016 15.17V5c0-1.1.9-2 2-2h9c.82 0 1.54.5 1.84 1.22l3.02 7.05c.09.23.14.47.14.73V14z"/>
                 </svg>
               </button>
-              <button class="act-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复">↻ 重新生成</button>
-              <button class="act-btn" @click="copyMessage(msg)" title="复制这条回复">⧉ 复制</button>
-              <button class="act-btn" @click="openExportModal(msg)" :disabled="(msg.detectedRecipeNames || []).length === 0" title="导出到食谱推荐页">⇪ 导出 {{ (msg.detectedRecipeNames || []).length > 0 ? `(${(msg.detectedRecipeNames || []).length})` : '' }}</button>
+              <button class="act-btn icon-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复" aria-label="重新生成">
+                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
+                  <path d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6a6 6 0 01-10.24 4.24l-1.42 1.42A8 8 0 1020 13c0-4.42-3.58-8-8-8z"/>
+                </svg>
+              </button>
+              <button class="act-btn icon-btn" @click="copyMessage(msg)" title="复制这条回复" aria-label="复制">
+                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
+                  <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                </svg>
+              </button>
+              <button class="act-btn icon-btn" @click="openExportModal(msg)" :disabled="(msg.detectedRecipeNames || []).length === 0" title="导出到食谱推荐页" aria-label="导出">
+                <svg viewBox="0 0 24 24" class="icon-plain" aria-hidden="true">
+                  <path d="M5 20h14v-2H5v2zM12 2l-5.5 5.5 1.42 1.42L11 5.84V16h2V5.84l3.08 3.08 1.42-1.42L12 2z"/>
+                </svg>
+                <span v-if="(msg.detectedRecipeNames || []).length > 0" class="icon-badge">{{ (msg.detectedRecipeNames || []).length }}</span>
+              </button>
             </div>
 
             <!-- 差评原因 -->
@@ -846,18 +859,18 @@ onMounted(() => {
 .is-ai .msg-body:hover .msg-actions { opacity: 1; }
 
 .act-btn {
-  border: 1px solid #e4eaf3;
-  background: #fbfcfe;
-  color: #4d5b66;
+  border: 1.25px solid #1f2329;
+  background: #fff;
+  color: #1f2329;
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 6px 11px;
   font-size: 12px;
   cursor: pointer;
   transition: .18s;
 }
 
-.act-btn:hover:not(:disabled) { background: #f7f9fc; border-color: #cfd8e6; }
-.act-btn.active { background: #eef3ff; border-color: #b9cbf7; color: #3f63c9; }
+.act-btn:hover:not(:disabled) { background: #f4f4f4; border-color: #15181d; }
+.act-btn.active { background: #1f2329; border-color: #1f2329; color: #fff; }
 .act-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .thumb-btn {
@@ -877,6 +890,38 @@ onMounted(() => {
 
 .thumb-icon.is-down {
   transform: rotate(0deg);
+}
+
+.icon-btn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-plain {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
+.icon-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #1f2329;
+  color: #fff;
+  border: 1px solid #fff;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  padding: 0 4px;
 }
 
 .reason-panel { margin-top: 10px; background: #f9fbfc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e1e8ed; }

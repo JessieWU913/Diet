@@ -1,7 +1,7 @@
 <template>
   <div class="stats-view">
     <div class="page-header">
-      <h2>数据分析</h2>
+      <h2>健康管理</h2>
       <div class="header-tools">
         <label>
           选择日期
@@ -35,7 +35,7 @@
 
           <div class="side-col">
             <div class="side-label">运动消耗</div>
-            <div class="side-value">0 kcal</div>
+            <div class="side-value">{{ exerciseTotalCalories }} kcal</div>
           </div>
         </div>
 
@@ -71,6 +71,32 @@
           <li>TDEE：{{ plan.tdee }} kcal</li>
           <li>建议缺口：{{ plan.deficit }} kcal/天</li>
         </ul>
+
+        <div class="exercise-entry">
+          <h4>运动消耗录入（MET 估算）</h4>
+          <div class="ee-row">
+            <select v-model="exerciseForm.exerciseType">
+              <option v-for="opt in metOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <input type="number" min="1" v-model.number="exerciseForm.durationMinutes" placeholder="时长(分钟)" />
+          </div>
+          <div class="ee-row">
+            <input type="number" min="0" step="0.1" v-model.number="exerciseForm.met" placeholder="MET（可改）" />
+            <input type="number" min="0" step="1" v-model.number="exerciseForm.manualCalories" placeholder="手动 kcal（可选）" />
+          </div>
+          <div class="ee-preview">预计消耗：{{ estimatedExerciseCalories }} kcal</div>
+          <button class="ee-add-btn" @click="addExerciseLog" :disabled="exerciseSaving">
+            {{ exerciseSaving ? '记录中...' : '记录运动消耗' }}
+          </button>
+
+          <div class="ee-list" v-if="exerciseLogs.length > 0">
+            <div class="ee-item" v-for="log in exerciseLogs" :key="log.id">
+              <span>{{ log.exercise_type }} · {{ Math.round(Number(log.duration_minutes || 0)) }} 分钟</span>
+              <span>{{ Math.round(Number(log.calories || 0)) }} kcal</span>
+              <button @click="removeExerciseLog(log.id)">删除</button>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -93,6 +119,26 @@ const profile = ref({
 })
 
 const dayTotals = ref({ calories: 0, protein: 0, fat: 0, carbs: 0 })
+const exerciseLogs = ref([])
+const exerciseTotalCalories = ref(0)
+const exerciseSaving = ref(false)
+
+const metOptions = [
+  { value: 'walk', label: '快走', met: 4.3 },
+  { value: 'run', label: '慢跑', met: 7.5 },
+  { value: 'cycle', label: '骑行', met: 6.8 },
+  { value: 'swim', label: '游泳', met: 8.0 },
+  { value: 'strength', label: '力量训练', met: 5.0 },
+  { value: 'hiit', label: 'HIIT', met: 9.0 },
+  { value: 'yoga', label: '瑜伽', met: 3.0 },
+]
+
+const exerciseForm = ref({
+  exerciseType: 'walk',
+  durationMinutes: 30,
+  met: 4.3,
+  manualCalories: null,
+})
 
 const toInt = (v) => Math.max(0, Math.round(Number(v || 0)))
 
@@ -145,17 +191,34 @@ const plan = computed(() => {
 })
 
 const remainCalories = computed(() => {
-  const remain = plan.value.calories - toInt(dayTotals.value.calories)
+  const remain = plan.value.calories + toInt(exerciseTotalCalories.value) - toInt(dayTotals.value.calories)
   return Math.max(0, remain)
 })
 
 const ringStyle = computed(() => {
   const consumed = toInt(dayTotals.value.calories)
-  const ratio = Math.max(0, Math.min(1, consumed / Math.max(1, plan.value.calories)))
+  const budget = Math.max(1, plan.value.calories + toInt(exerciseTotalCalories.value))
+  const ratio = Math.max(0, Math.min(1, consumed / budget))
   const deg = Math.round(ratio * 360)
   return {
     background: `conic-gradient(#37c78b ${deg}deg, #ecedf2 0deg)`
   }
+})
+
+const selectedExerciseLabel = computed(() => {
+  const opt = metOptions.find((x) => x.value === exerciseForm.value.exerciseType)
+  return opt ? opt.label : '运动'
+})
+
+const estimatedExerciseCalories = computed(() => {
+  if (Number(exerciseForm.value.manualCalories || 0) > 0) {
+    return toInt(exerciseForm.value.manualCalories)
+  }
+  const weight = Number(profile.value.weight || 0) || 60
+  const met = Number(exerciseForm.value.met || 0)
+  const min = Number(exerciseForm.value.durationMinutes || 0)
+  if (met <= 0 || min <= 0) return 0
+  return toInt(met * weight * (min / 60))
 })
 
 const macroPct = (value, goal) => {
@@ -205,13 +268,67 @@ const loadDateTotals = async () => {
   }
 }
 
+const loadExerciseTotals = async () => {
+  if (!userId || !selectedDate.value) return
+  try {
+    const res = await API.get(`/exercise-log/?user_id=${userId}&date=${selectedDate.value}`)
+    exerciseLogs.value = res?.data?.logs || []
+    exerciseTotalCalories.value = toInt(res?.data?.total_calories || 0)
+  } catch (e) {
+    console.error(e)
+    exerciseLogs.value = []
+    exerciseTotalCalories.value = 0
+  }
+}
+
+const addExerciseLog = async () => {
+  if (!userId || !selectedDate.value) return
+  if (Number(exerciseForm.value.durationMinutes || 0) <= 0 && Number(exerciseForm.value.manualCalories || 0) <= 0) {
+    return
+  }
+
+  exerciseSaving.value = true
+  try {
+    await API.post('/exercise-log/', {
+      user_id: userId,
+      date: selectedDate.value,
+      exercise_type: selectedExerciseLabel.value,
+      duration_minutes: Number(exerciseForm.value.durationMinutes || 0),
+      met: Number(exerciseForm.value.met || 0),
+      calories: Number(exerciseForm.value.manualCalories || 0),
+    })
+    exerciseForm.value.manualCalories = null
+    await loadExerciseTotals()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    exerciseSaving.value = false
+  }
+}
+
+const removeExerciseLog = async (logId) => {
+  try {
+    await API.delete(`/exercise-log/?user_id=${userId}&log_id=${logId}`)
+    await loadExerciseTotals()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 watch(selectedDate, () => {
   loadDateTotals()
+  loadExerciseTotals()
+})
+
+watch(() => exerciseForm.value.exerciseType, (type) => {
+  const opt = metOptions.find((x) => x.value === type)
+  if (opt) exerciseForm.value.met = opt.met
 })
 
 onMounted(async () => {
   await loadProfile()
   await loadDateTotals()
+  await loadExerciseTotals()
 })
 </script>
 
@@ -288,6 +405,72 @@ onMounted(async () => {
 .ring-card.info h3 { margin: 0 0 10px; font-size: 16px; color: #2c3348; }
 .ring-card.info ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 .ring-card.info li { color: #5d6878; font-size: 13px; }
+
+.exercise-entry {
+  margin-top: 14px;
+  border-top: 1px dashed #e3e8ef;
+  padding-top: 12px;
+}
+.exercise-entry h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #2c3348;
+}
+.ee-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ee-row select,
+.ee-row input {
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+.ee-preview {
+  font-size: 12px;
+  color: #5f6a79;
+  margin: 4px 0 8px;
+}
+.ee-add-btn {
+  border: 1px solid #1f2329;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2329;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ee-add-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.ee-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.ee-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #edf1f5;
+  background: #fafbfd;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #5d6878;
+}
+.ee-item button {
+  border: 1px solid #cfd8e6;
+  border-radius: 6px;
+  background: #fff;
+  color: #415064;
+  font-size: 11px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
 
 @media (max-width: 1100px) {
   .ring-grid { grid-template-columns: 1fr; }
