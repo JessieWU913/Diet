@@ -22,6 +22,7 @@ const routes = [
   { path: '/favorites', name: 'Favorites', component: FavoritesView, meta: { requiresAuth: true } },
   { path: '/ingredient-search', name: 'IngredientSearch', component: IngredientSearchView, meta: { requiresAuth: true } },
   { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAdmin: true } },
+  { path: '/admin/update', name: 'AdminUpdate', component: AdminView, meta: { requiresAdmin: true } },
 ]
 
 const router = createRouter({

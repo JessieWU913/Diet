@@ -12,6 +12,9 @@
           <router-link to="/admin" class="nav-item">
             <span class="nav-icon"></span><span>管理员面板</span>
           </router-link>
+          <router-link to="/admin/update" class="nav-item">
+            <span class="nav-icon"></span><span>数据更新</span>
+          </router-link>
         </template>
 
         <template v-else>

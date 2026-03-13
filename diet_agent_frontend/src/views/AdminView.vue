@@ -5,19 +5,19 @@
         <h2>管理员控制台</h2>
         <p>查看用户注册信息、用户偏好与用户历史记录。</p>
       </div>
-      <button class="refresh-btn" @click="loadOverview" :disabled="loading">
-        {{ loading ? '加载中...' : '刷新数据' }}
+      <button class="ui-btn primary" @click="activeTab === 'overview' ? loadOverview() : submitImport()" :disabled="loading || (activeTab === 'update' && (importing || !importFile))">
+        {{ activeTab === 'overview' ? (loading ? '加载中...' : '刷新数据') : (importing ? '导入中...' : '开始导入') }}
       </button>
     </div>
 
     <div v-if="errorText" class="error-box">{{ errorText }}</div>
 
-    <section class="card import-card">
+    <section v-if="activeTab === 'update'" class="card import-card">
       <h3>数据更新模块</h3>
       <p class="import-desc">
         上传 JSON 文件并选择导入类型：食材、菜谱或食材关系。系统会做去重导入并补全可补全字段。
       </p>
-      <p class="import-tip">数据目录提示：/Users/wujieqian/Desktop/毕业设计/final_data_bohee/</p>
+      <p class="import-tip">目录不受限制，你可以从任意本地目录选择 JSON 文件。</p>
 
       <div class="import-form-row">
         <label class="import-label">导入类型</label>
@@ -34,10 +34,15 @@
       </div>
 
       <div class="import-actions">
-        <button class="import-btn" :disabled="importing || !importFile" @click="submitImport">
+        <button class="ui-btn accent" :disabled="importing || !importFile" @click="submitImport">
           {{ importing ? '导入中...' : '开始导入' }}
         </button>
         <span v-if="importFile" class="file-name">{{ importFile.name }}</span>
+      </div>
+
+      <div class="path-box" v-if="selectedPath">
+        <div class="path-label">已选择路径</div>
+        <div class="path-value">{{ selectedPath }}</div>
       </div>
 
       <div v-if="importResult" class="import-result">
@@ -49,6 +54,7 @@
       </div>
     </section>
 
+    <template v-if="activeTab === 'overview'">
     <section class="stats-grid" v-if="stats">
       <div class="stat-card">
         <div class="k">用户数</div>
@@ -139,12 +145,16 @@
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import API from '../api.js'
+
+const route = useRoute()
 
 const loading = ref(false)
 const errorText = ref('')
@@ -155,6 +165,8 @@ const importType = ref('ingredient')
 const importFile = ref(null)
 const importing = ref(false)
 const importResult = ref(null)
+const selectedPath = ref('')
+const activeTab = computed(() => (route.name === 'AdminUpdate' ? 'update' : 'overview'))
 
 const activeUser = computed(() => users.value.find((u) => u.user_id === activeUserId.value) || null)
 
@@ -175,6 +187,7 @@ const selectUser = (u) => {
 const onFileChange = (e) => {
   const f = e?.target?.files?.[0]
   importFile.value = f || null
+  selectedPath.value = e?.target?.value || f?.webkitRelativePath || f?.name || ''
 }
 
 const submitImport = async () => {
@@ -246,11 +259,27 @@ onMounted(() => {
 .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .admin-head h2 { margin: 0 0 6px; font-size: 28px; color: #263238; }
 .admin-head p { margin: 0; color: #60707d; }
-.refresh-btn {
-  border: none; border-radius: 10px; padding: 10px 14px; font-weight: 700;
-  background: #1f7a6a; color: #fff; cursor: pointer;
+
+.ui-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
 }
-.refresh-btn:disabled { opacity: .65; cursor: not-allowed; }
+
+.ui-btn.primary {
+  background: #1f7a6a;
+  color: #fff;
+}
+
+.ui-btn.accent {
+  background: #2b8f77;
+  color: #fff;
+}
+
+.ui-btn:disabled { opacity: .65; cursor: not-allowed; }
 
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .stat-card {
@@ -276,17 +305,22 @@ onMounted(() => {
   background: #fff;
 }
 .import-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.import-btn {
-  border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-weight: 700;
-  cursor: pointer;
-  background: #2b8f77;
-  color: #fff;
-}
-.import-btn:disabled { opacity: .6; cursor: not-allowed; }
 .file-name { color: #60707d; font-size: 13px; }
+
+.path-box {
+  margin-top: 10px;
+  border: 1px solid #dde8ef;
+  border-radius: 10px;
+  background: #f8fbfd;
+  padding: 10px 12px;
+}
+
+.path-label { font-size: 12px; color: #6a7d8a; margin-bottom: 4px; }
+.path-value {
+  color: #243845;
+  font-size: 13px;
+  word-break: break-all;
+}
 .import-result {
   margin-top: 12px;
   border: 1px solid #dceaf3;
