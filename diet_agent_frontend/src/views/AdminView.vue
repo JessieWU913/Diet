@@ -51,6 +51,7 @@
         <button class="ui-btn accent" :disabled="importing || (!absolutePath && !importFile)" @click="submitImport">
           {{ importing ? '导入中...' : '开始导入' }}
         </button>
+        <button class="ui-btn ghost" :disabled="importing" @click="previewImport">导入前预览</button>
         <button class="ui-btn ghost danger" :disabled="importing || !importFile" @click="cancelUpload">取消上传</button>
       </div>
 
@@ -75,6 +76,78 @@
           <li>类型：{{ importResult.import_type }}</li>
           <li v-for="(v, k) in importResult.stats" :key="k">{{ k }}: {{ v }}</li>
         </ul>
+      </div>
+
+      <div v-if="previewResult" class="import-result">
+        <h4>导入预览（Dry-run）</h4>
+        <ul>
+          <li v-for="(v, k) in previewResult.preview" :key="`pv-${k}`" v-show="k !== 'diff_samples'">{{ k }}: {{ formatPreviewValue(v) }}</li>
+        </ul>
+        <div v-if="Array.isArray(previewResult.preview?.diff_samples) && previewResult.preview.diff_samples.length > 0" class="diff-box">
+          <div class="path-label">关键差异示例</div>
+          <ul>
+            <li v-for="(d, idx) in previewResult.preview.diff_samples" :key="`d-${idx}`">
+              {{ d.name }} / {{ d.action }} / {{ (d.changed_fields || []).join(', ') }}
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="import-result">
+        <div class="quality-head">
+          <h4>导入任务日志与回滚</h4>
+          <div class="q-actions">
+            <button class="ui-btn ghost" @click="loadImportTasks">刷新日志</button>
+            <button class="ui-btn ghost danger" @click="rollbackLatestRelationImport">回滚最近关系导入</button>
+          </div>
+        </div>
+        <div class="task-empty" v-if="importTasks.length === 0">暂无导入任务</div>
+        <table v-else class="task-table">
+          <thead>
+            <tr>
+              <th>任务ID</th>
+              <th>类型</th>
+              <th>来源</th>
+              <th>文件</th>
+              <th>开始</th>
+              <th>结束</th>
+              <th>耗时(ms)</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in importTasks" :key="t.id">
+              <td>{{ t.id }}</td>
+              <td>{{ t.import_type }}</td>
+              <td>{{ t.source }}</td>
+              <td>{{ t.file_name || '—' }}</td>
+              <td>{{ t.started_at || '—' }}</td>
+              <td>{{ t.ended_at || '—' }}</td>
+              <td>{{ t.duration_ms ?? 0 }}</td>
+              <td>{{ t.status }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="import-result">
+        <div class="quality-head">
+          <h4>数据质量巡检面板</h4>
+          <div class="q-actions">
+            <button class="ui-btn ghost" @click="scanDataQuality">开始巡检</button>
+            <button class="ui-btn ghost" @click="fixDataQuality('fix_missing_info')">修复 missing_info</button>
+            <button class="ui-btn ghost" @click="fixDataQuality('fill_empty_relation_desc')">修复空描述关系</button>
+          </div>
+        </div>
+        <ul v-if="qualityChecks" class="qc-list">
+          <li v-for="(v, k) in qualityChecks" :key="`qc-${k}`">{{ k }}: {{ v }}</li>
+        </ul>
+        <div v-if="qualitySuggestions.length > 0" class="diff-box">
+          <div class="path-label">修复建议</div>
+          <ul>
+            <li v-for="(s, i) in qualitySuggestions" :key="`qs-${i}`">{{ s }}</li>
+          </ul>
+        </div>
       </div>
     </section>
 
@@ -169,6 +242,49 @@
         </div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="quality-head">
+        <h3>用户行为审计</h3>
+        <div class="audit-filter">
+          <input type="date" v-model="auditStartDate" class="audit-date" />
+          <input type="date" v-model="auditEndDate" class="audit-date" />
+          <button class="ui-btn ghost" @click="loadUserAudit">查询</button>
+        </div>
+      </div>
+      <div v-if="auditData" class="audit-grid">
+        <div class="stat-card">
+          <div class="k">日志活跃用户</div>
+          <div class="v">{{ auditData.active_users?.by_diet_log ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="k">聊天活跃用户</div>
+          <div class="v">{{ auditData.active_users?.by_chat ?? 0 }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="k">记录到的失败请求</div>
+          <div class="v">{{ auditData.failed_requests_recorded ?? 0 }}</div>
+        </div>
+      </div>
+      <table v-if="auditData?.top_users?.length" class="task-table">
+        <thead>
+          <tr>
+            <th>用户ID</th>
+            <th>日志数</th>
+            <th>会话数</th>
+            <th>收藏数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="u in auditData.top_users" :key="`au-${u.user_id}`">
+            <td>{{ u.user_id }}</td>
+            <td>{{ u.log_count }}</td>
+            <td>{{ u.chat_count }}</td>
+            <td>{{ u.collect_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
     </template>
   </div>
 </template>
@@ -189,12 +305,19 @@ const importType = ref('ingredient')
 const importFile = ref(null)
 const importing = ref(false)
 const importResult = ref(null)
+const previewResult = ref(null)
 const absolutePath = ref('')
 const fileInputRef = ref(null)
 const activeTab = computed(() => (route.name === 'AdminUpdate' ? 'update' : 'overview'))
 const displayImportPath = computed(() => absolutePath.value)
 const importProgress = ref(0)
 const importStageText = ref('')
+const importTasks = ref([])
+const qualityChecks = ref(null)
+const qualitySuggestions = ref([])
+const auditData = ref(null)
+const auditStartDate = ref('')
+const auditEndDate = ref('')
 
 const activeUser = computed(() => users.value.find((u) => u.user_id === activeUserId.value) || null)
 
@@ -251,6 +374,7 @@ const submitImport = async () => {
   importStageText.value = '准备导入任务...'
   errorText.value = ''
   importResult.value = null
+  previewResult.value = null
   try {
     const fd = new FormData()
     fd.append('import_type', importType.value)
@@ -288,6 +412,8 @@ const submitImport = async () => {
     }
     importProgress.value = 100
     importStageText.value = '导入完成'
+    await loadImportTasks()
+    await scanDataQuality()
     await loadOverview()
   } catch (e) {
     errorText.value = e?.response?.data?.error || '导入失败'
@@ -300,6 +426,112 @@ const submitImport = async () => {
         importStageText.value = ''
       }, 1200)
     }
+  }
+}
+
+const formatPreviewValue = (v) => {
+  if (typeof v === 'object') return JSON.stringify(v)
+  return v
+}
+
+const previewImport = async () => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) {
+    errorText.value = '管理员登录已失效，请重新登录'
+    return
+  }
+  if (!absolutePath.value && !importFile.value) {
+    errorText.value = '请先选择 JSON 文件或填写真实路径'
+    return
+  }
+  try {
+    errorText.value = ''
+    const fd = new FormData()
+    fd.append('import_type', importType.value)
+    if (absolutePath.value) fd.append('file_path', absolutePath.value)
+    if (importFile.value) fd.append('file', importFile.value)
+    const res = await API.post('/admin/import-preview/', fd, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    previewResult.value = res.data
+  } catch (e) {
+    errorText.value = e?.response?.data?.error || '导入预览失败'
+  }
+}
+
+const loadImportTasks = async () => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) return
+  try {
+    const res = await API.get('/admin/import-tasks/?limit=20', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    importTasks.value = res.data?.tasks || []
+  } catch {
+    importTasks.value = []
+  }
+}
+
+const rollbackLatestRelationImport = async () => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) return
+  try {
+    const res = await API.post('/admin/import-rollback/', {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    importResult.value = { import_type: 'rollback', stats: res.data }
+    await loadImportTasks()
+    await scanDataQuality()
+  } catch (e) {
+    errorText.value = e?.response?.data?.error || '回滚失败'
+  }
+}
+
+const scanDataQuality = async () => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) return
+  try {
+    const res = await API.get('/admin/data-quality/', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    qualityChecks.value = res.data?.checks || null
+    qualitySuggestions.value = res.data?.suggestions || []
+  } catch {
+    qualityChecks.value = null
+    qualitySuggestions.value = []
+  }
+}
+
+const fixDataQuality = async (action) => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) return
+  try {
+    const res = await API.post('/admin/data-quality/fix/', { action }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    importResult.value = { import_type: `fix:${action}`, stats: res.data }
+    await scanDataQuality()
+  } catch (e) {
+    errorText.value = e?.response?.data?.error || '修复失败'
+  }
+}
+
+const loadUserAudit = async () => {
+  const token = localStorage.getItem('admin_token') || ''
+  if (!token) return
+  try {
+    const params = new URLSearchParams()
+    if (auditStartDate.value) params.set('start_date', auditStartDate.value)
+    if (auditEndDate.value) params.set('end_date', auditEndDate.value)
+    const res = await API.get(`/admin/user-audit/?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    auditData.value = res.data || null
+  } catch {
+    auditData.value = null
   }
 }
 
@@ -330,7 +562,14 @@ const loadOverview = async () => {
 }
 
 onMounted(() => {
+  const today = new Date()
+  const prev = new Date(today.getTime() - 29 * 24 * 3600 * 1000)
+  auditEndDate.value = today.toISOString().slice(0, 10)
+  auditStartDate.value = prev.toISOString().slice(0, 10)
   loadOverview()
+  loadImportTasks()
+  scanDataQuality()
+  loadUserAudit()
 })
 </script>
 
@@ -499,6 +738,59 @@ onMounted(() => {
 }
 .import-result ul { margin: 0; padding-left: 18px; }
 .import-result li { margin-bottom: 4px; color: #1f2e38; }
+
+.diff-box {
+  margin-top: 10px;
+  border: 1px dashed #bfd5e2;
+  border-radius: 10px;
+  background: #f9fcff;
+  padding: 8px 10px;
+}
+
+.quality-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.q-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.task-empty { color: #8ba0ae; }
+
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.task-table th, .task-table td {
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+  padding: 8px 6px;
+}
+
+.qc-list { margin: 0; padding-left: 18px; }
+.qc-list li { margin-bottom: 4px; color: #1f2e38; }
+
+.audit-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-date {
+  border: 1px solid #d2e0ea;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.audit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
 
 .u-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .u-table th, .u-table td {

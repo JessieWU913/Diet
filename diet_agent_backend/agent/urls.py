@@ -4,7 +4,9 @@ from .views import (
     RecipeDetailView, MealEventView, FoodSearchView, DietLogView,
     NutritionSummaryView, RecommendMealsView, FavoriteIngredientsView,
     SimilarIngredientView, FoodConflictView, UserCollectionView, ChatHistoryView,
-    IngredientDetailView, AdminAuthView, AdminOverviewView, AdminDataImportView
+    IngredientDetailView, AdminAuthView, AdminOverviewView, AdminDataImportView,
+    AdminImportPreviewView, AdminImportTaskListView, AdminImportRollbackView,
+    AdminDataQualityView, AdminDataQualityFixView, AdminUserAuditView
 )
 
 urlpatterns = [
@@ -14,6 +16,12 @@ urlpatterns = [
     path('admin/auth/', AdminAuthView.as_view(), name='admin_auth'),
     path('admin/overview/', AdminOverviewView.as_view(), name='admin_overview'),
     path('admin/import-json/', AdminDataImportView.as_view(), name='admin_import_json'),
+    path('admin/import-preview/', AdminImportPreviewView.as_view(), name='admin_import_preview'),
+    path('admin/import-tasks/', AdminImportTaskListView.as_view(), name='admin_import_tasks'),
+    path('admin/import-rollback/', AdminImportRollbackView.as_view(), name='admin_import_rollback'),
+    path('admin/data-quality/', AdminDataQualityView.as_view(), name='admin_data_quality'),
+    path('admin/data-quality/fix/', AdminDataQualityFixView.as_view(), name='admin_data_quality_fix'),
+    path('admin/user-audit/', AdminUserAuditView.as_view(), name='admin_user_audit'),
     path('feedback/', FeedbackView.as_view(), name='feedback'),
     path('recipe/', RecipeDetailView.as_view(), name='recipe'),
     path('meal-event/', MealEventView.as_view(), name='meal_event'),

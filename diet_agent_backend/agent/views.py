@@ -206,6 +206,42 @@ def _find_or_create_relation_name(raw_name: str, valid_names: set):
 
     return cleaned, True
 
+
+def _read_admin_import_payload(request):
+    import_type = str(request.data.get("import_type", "")).strip().lower()
+    upload = request.FILES.get("file")
+    file_path = str(request.data.get("file_path", "")).strip()
+
+    if import_type not in {"ingredient", "recipe", "relation"}:
+        raise ValueError("import_type 必须是 ingredient / recipe / relation")
+    if not upload and not file_path:
+        raise ValueError("请上传 JSON 文件，或填写服务器可读的 JSON 绝对路径")
+
+    if file_path:
+        if not os.path.isabs(file_path):
+            raise ValueError("file_path 必须是绝对路径")
+        if not file_path.lower().endswith(".json"):
+            raise ValueError("file_path 必须指向 .json 文件")
+        if not os.path.exists(file_path):
+            raise ValueError(f"文件不存在: {file_path}")
+        with open(file_path, "r", encoding="utf-8-sig") as f:
+            raw_text = f.read()
+        source = "path"
+        file_name = os.path.basename(file_path)
+    else:
+        raw_text = upload.read().decode("utf-8-sig")
+        source = "upload"
+        file_name = str(getattr(upload, "name", "uploaded.json"))
+
+    payload = json.loads(raw_text)
+    return {
+        "import_type": import_type,
+        "payload": payload,
+        "source": source,
+        "file_path": file_path,
+        "file_name": file_name,
+    }
+
 # 用户注册与登录接口
 class UserAuthView(APIView):
     def post(self, request):
@@ -416,49 +452,102 @@ class AdminDataImportView(APIView):
         if not _validate_admin_token(request):
             return Response({"error": "管理员认证失败，请重新登录"}, status=401)
 
-        import_type = str(request.data.get("import_type", "")).strip().lower()
-        upload = request.FILES.get("file")
-        file_path = str(request.data.get("file_path", "")).strip()
-        if import_type not in {"ingredient", "recipe", "relation"}:
-            return Response({"error": "import_type 必须是 ingredient / recipe / relation"}, status=400)
-        if not upload and not file_path:
-            return Response({"error": "请上传 JSON 文件，或填写服务器可读的 JSON 绝对路径"}, status=400)
-
+        task_id = str(uuid.uuid4())[:12]
+        started_at = datetime.now()
+        started_at_text = started_at.strftime("%Y-%m-%d %H:%M:%S")
         try:
-            if file_path:
-                if not os.path.isabs(file_path):
-                    return Response({"error": "file_path 必须是绝对路径"}, status=400)
-                if not file_path.lower().endswith(".json"):
-                    return Response({"error": "file_path 必须指向 .json 文件"}, status=400)
-                if not os.path.exists(file_path):
-                    return Response({"error": f"文件不存在: {file_path}"}, status=400)
-                with open(file_path, "r", encoding="utf-8-sig") as f:
-                    raw_text = f.read()
-            else:
-                raw_text = upload.read().decode("utf-8-sig")
-            payload = json.loads(raw_text)
+            parsed = _read_admin_import_payload(request)
         except Exception as e:
             return Response({"error": f"JSON 解析失败: {e}"}, status=400)
 
+        import_type = parsed["import_type"]
+        payload = parsed["payload"]
+        source = parsed["source"]
+        file_path = parsed["file_path"]
+        file_name = parsed["file_name"]
+
+        self._create_import_task(
+            task_id=task_id,
+            import_type=import_type,
+            source=source,
+            file_path=file_path,
+            file_name=file_name,
+            started_at=started_at_text,
+        )
+
         try:
             if import_type == "ingredient":
-                stats = self._import_ingredients(payload)
+                stats = self._import_ingredients(payload, task_id=task_id)
             elif import_type == "recipe":
-                stats = self._import_recipes(payload)
+                stats = self._import_recipes(payload, task_id=task_id)
             else:
-                stats = self._import_relations(payload)
+                stats = self._import_relations(payload, task_id=task_id)
+
+            ended_at = datetime.now()
+            ended_at_text = ended_at.strftime("%Y-%m-%d %H:%M:%S")
+            duration_ms = int((ended_at - started_at).total_seconds() * 1000)
+            self._finish_import_task(task_id, "success", ended_at_text, duration_ms, stats=stats)
 
             return Response({
                 "status": "success",
                 "import_type": import_type,
-                "source": "path" if file_path else "upload",
+                "task_id": task_id,
+                "source": source,
                 "file_path": file_path,
+                "file_name": file_name,
+                "started_at": started_at_text,
+                "ended_at": ended_at_text,
+                "duration_ms": duration_ms,
                 "stats": stats,
             })
         except Exception as e:
+            ended_at = datetime.now()
+            ended_at_text = ended_at.strftime("%Y-%m-%d %H:%M:%S")
+            duration_ms = int((ended_at - started_at).total_seconds() * 1000)
+            self._finish_import_task(task_id, "failed", ended_at_text, duration_ms, error=str(e))
             return Response({"error": f"导入失败: {e}"}, status=500)
 
-    def _import_ingredients(self, data):
+    def _create_import_task(self, task_id, import_type, source, file_path, file_name, started_at):
+        cypher = """
+        CREATE (t:ImportTask {
+            id: $task_id,
+            import_type: $import_type,
+            source: $source,
+            file_path: $file_path,
+            file_name: $file_name,
+            started_at: $started_at,
+            status: 'running',
+            created_at: $started_at
+        })
+        """
+        graph_db.query(cypher, {
+            "task_id": task_id,
+            "import_type": import_type,
+            "source": source,
+            "file_path": file_path,
+            "file_name": file_name,
+            "started_at": started_at,
+        })
+
+    def _finish_import_task(self, task_id, status, ended_at, duration_ms, stats=None, error=None):
+        cypher = """
+        MATCH (t:ImportTask {id: $task_id})
+        SET t.status = $status,
+            t.ended_at = $ended_at,
+            t.duration_ms = $duration_ms,
+            t.stats_json = $stats_json,
+            t.error = $error
+        """
+        graph_db.query(cypher, {
+            "task_id": task_id,
+            "status": status,
+            "ended_at": ended_at,
+            "duration_ms": duration_ms,
+            "stats_json": json.dumps(stats or {}, ensure_ascii=False),
+            "error": str(error or ""),
+        })
+
+    def _import_ingredients(self, data, task_id=None):
         if not isinstance(data, list):
             raise ValueError("食材 JSON 必须是数组")
 
@@ -576,7 +665,7 @@ class AdminDataImportView(APIView):
             "upserted_nutrient_relations": nutrient_rel_count,
         }
 
-    def _import_recipes(self, data):
+    def _import_recipes(self, data, task_id=None):
         if not isinstance(data, list):
             raise ValueError("菜谱 JSON 必须是数组")
 
@@ -685,7 +774,7 @@ class AdminDataImportView(APIView):
             "upserted_contains_relations": contains_count,
         }
 
-    def _import_relations(self, data):
+    def _import_relations(self, data, task_id=None):
         if not isinstance(data, dict):
             raise ValueError("关系 JSON 必须是对象")
 
@@ -695,36 +784,39 @@ class AdminDataImportView(APIView):
         rel_queries = {
             "互斥": """
                 MERGE (a:Ingredient {name: $src})
-                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now, a.created_by_import_task = $task_id
                 MERGE (b:Ingredient {name: $tgt})
-                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now, b.created_by_import_task = $task_id
                 MERGE (a)-[r:CLASH_WITH]->(b)
                 SET r.desc = $desc,
                     r.source_category = $category,
                     r.source_sub_category = $sub_category,
-                    r.updated_at = $now
+                    r.updated_at = $now,
+                    r.import_task_id = $task_id
             """,
             "互补": """
                 MERGE (a:Ingredient {name: $src})
-                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now, a.created_by_import_task = $task_id
                 MERGE (b:Ingredient {name: $tgt})
-                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now, b.created_by_import_task = $task_id
                 MERGE (a)-[r:COMPLEMENT_WITH]->(b)
                 SET r.desc = $desc,
                     r.source_category = $category,
                     r.source_sub_category = $sub_category,
-                    r.updated_at = $now
+                    r.updated_at = $now,
+                    r.import_task_id = $task_id
             """,
             "重叠": """
                 MERGE (a:Ingredient {name: $src})
-                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now
+                ON CREATE SET a.source = 'relation_upload', a.missing_info = true, a.created_at = $now, a.created_by_import_task = $task_id
                 MERGE (b:Ingredient {name: $tgt})
-                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now
+                ON CREATE SET b.source = 'relation_upload', b.missing_info = true, b.created_at = $now, b.created_by_import_task = $task_id
                 MERGE (a)-[r:SIMILAR_TO]->(b)
                 SET r.desc = $desc,
                     r.source_category = $category,
                     r.source_sub_category = $sub_category,
-                    r.updated_at = $now
+                    r.updated_at = $now,
+                    r.import_task_id = $task_id
             """,
         }
 
@@ -779,6 +871,7 @@ class AdminDataImportView(APIView):
                                     "category": str(category),
                                     "sub_category": str(sub_category),
                                     "now": now,
+                                    "task_id": task_id or "",
                                 })
                                 relation_count += 1
 
@@ -788,6 +881,463 @@ class AdminDataImportView(APIView):
             "new_ingredient_nodes_created": created_name_count,
             "deduped_relations": len(relation_seen),
         }
+
+
+class AdminImportPreviewView(APIView):
+    """导入前预览与差异对比（dry-run）"""
+    def post(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        try:
+            parsed = _read_admin_import_payload(request)
+        except Exception as e:
+            return Response({"error": f"JSON 解析失败: {e}"}, status=400)
+
+        import_type = parsed["import_type"]
+        payload = parsed["payload"]
+
+        if import_type == "ingredient":
+            preview = self._preview_ingredients(payload)
+        elif import_type == "recipe":
+            preview = self._preview_recipes(payload)
+        else:
+            preview = self._preview_relations(payload)
+
+        return Response({"status": "success", "import_type": import_type, "preview": preview})
+
+    def _preview_ingredients(self, data):
+        if not isinstance(data, list):
+            raise ValueError("食材 JSON 必须是数组")
+        dedup = {}
+        for item in data:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                dedup[str(item.get("name")).strip()] = item
+
+        names = list(dedup.keys())
+        existing = {}
+        if names:
+            rows = graph_db.query(
+                "MATCH (i:Ingredient) WHERE i.name IN $names RETURN i.name AS name, i.category AS category, i.cal_per_100g AS cal_per_100g, i.original_name AS original_name, i.nutrients_raw AS nutrients_raw",
+                {"names": names},
+            )
+            existing = {r["name"]: r for r in rows}
+
+        create_count, update_count, skip_count = 0, 0, 0
+        diffs = []
+        for name, item in dedup.items():
+            nutrients = item.get("nutrients", {}) if isinstance(item.get("nutrients"), dict) else {}
+            incoming = {
+                "category": str(item.get("category") or "").strip(),
+                "cal_per_100g": _safe_float(item.get("cal_per_100g")),
+                "original_name": str(item.get("original_name") or "").strip(),
+                "nutrients_raw": json.dumps(nutrients, ensure_ascii=False),
+            }
+            ex = existing.get(name)
+            if not ex:
+                create_count += 1
+                if len(diffs) < 20:
+                    diffs.append({"name": name, "action": "create", "changed_fields": list(incoming.keys())})
+                continue
+
+            changed_fields = []
+            for k in ("category", "original_name", "nutrients_raw"):
+                if str(ex.get(k) or "") != str(incoming.get(k) or ""):
+                    changed_fields.append(k)
+            ex_cal = _safe_float(ex.get("cal_per_100g"))
+            in_cal = incoming.get("cal_per_100g")
+            if (ex_cal is None) != (in_cal is None) or (ex_cal is not None and in_cal is not None and abs(ex_cal - in_cal) > 1e-9):
+                changed_fields.append("cal_per_100g")
+
+            if changed_fields:
+                update_count += 1
+                if len(diffs) < 20:
+                    diffs.append({"name": name, "action": "update", "changed_fields": changed_fields})
+            else:
+                skip_count += 1
+
+        return {
+            "input_records": len(data),
+            "deduped_records": len(dedup),
+            "will_create": create_count,
+            "will_update": update_count,
+            "will_skip": skip_count,
+            "diff_samples": diffs,
+        }
+
+    def _preview_recipes(self, data):
+        if not isinstance(data, list):
+            raise ValueError("菜谱 JSON 必须是数组")
+        dedup = {}
+        for item in data:
+            if isinstance(item, dict) and str(item.get("name", "")).strip():
+                dedup[str(item.get("name")).strip()] = item
+
+        names = list(dedup.keys())
+        existing = {}
+        if names:
+            rows = graph_db.query(
+                "MATCH (r:Recipe) WHERE r.name IN $names RETURN r.name AS name, r.category AS category, r.calories AS calories, r.nutrients_raw AS nutrients_raw, r.ingredients_raw AS ingredients_raw, r.steps AS steps",
+                {"names": names},
+            )
+            existing = {r["name"]: r for r in rows}
+
+        create_count, update_count, skip_count = 0, 0, 0
+        diffs = []
+        for name, item in dedup.items():
+            nutrients = item.get("nutrients", {}) if isinstance(item.get("nutrients"), dict) else {}
+            calories = _safe_float((nutrients.get("热量") or {}).get("value") if isinstance(nutrients.get("热量"), dict) else None)
+            steps = item.get("steps", [])
+            incoming = {
+                "category": str(item.get("category") or "").strip(),
+                "calories": calories,
+                "nutrients_raw": json.dumps(nutrients, ensure_ascii=False),
+                "ingredients_raw": json.dumps(item.get("ingredients", []) if isinstance(item.get("ingredients"), list) else [], ensure_ascii=False),
+                "steps": json.dumps(steps, ensure_ascii=False) if isinstance(steps, list) else str(steps or ""),
+            }
+            ex = existing.get(name)
+            if not ex:
+                create_count += 1
+                if len(diffs) < 20:
+                    diffs.append({"name": name, "action": "create", "changed_fields": list(incoming.keys())})
+                continue
+
+            changed_fields = []
+            for k in ("category", "nutrients_raw", "ingredients_raw", "steps"):
+                if str(ex.get(k) or "") != str(incoming.get(k) or ""):
+                    changed_fields.append(k)
+            ex_cal = _safe_float(ex.get("calories"))
+            in_cal = incoming.get("calories")
+            if (ex_cal is None) != (in_cal is None) or (ex_cal is not None and in_cal is not None and abs(ex_cal - in_cal) > 1e-9):
+                changed_fields.append("calories")
+
+            if changed_fields:
+                update_count += 1
+                if len(diffs) < 20:
+                    diffs.append({"name": name, "action": "update", "changed_fields": changed_fields})
+            else:
+                skip_count += 1
+
+        return {
+            "input_records": len(data),
+            "deduped_records": len(dedup),
+            "will_create": create_count,
+            "will_update": update_count,
+            "will_skip": skip_count,
+            "diff_samples": diffs,
+        }
+
+    def _preview_relations(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("关系 JSON 必须是对象")
+
+        existing_rows = graph_db.query(
+            "MATCH (a:Ingredient)-[r:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]->(b:Ingredient) RETURN a.name AS src, type(r) AS rel, b.name AS tgt, coalesce(r.desc, '') AS desc"
+        )
+        existing_map = {(r.get("src"), r.get("rel"), r.get("tgt")): str(r.get("desc") or "") for r in existing_rows}
+        existing_names = graph_db.query("MATCH (i:Ingredient) RETURN i.name AS name")
+        valid_names = {str(x.get("name", "")).strip() for x in existing_names if x.get("name")}
+        type_map = {"互斥": "CLASH_WITH", "互补": "COMPLEMENT_WITH", "重叠": "SIMILAR_TO"}
+
+        create_count, update_count, skip_count = 0, 0, 0
+        diffs = []
+        seen = set()
+
+        for category, sub_dict in data.items():
+            if not isinstance(sub_dict, dict):
+                continue
+            for _, item_list in sub_dict.items():
+                if not isinstance(item_list, list):
+                    continue
+                for item in item_list:
+                    if not isinstance(item, dict):
+                        continue
+                    src_final, _ = _find_or_create_relation_name(item.get("食物名称"), valid_names)
+                    if not src_final:
+                        continue
+                    rel_obj = item.get("食物关系", {}) if isinstance(item.get("食物关系"), dict) else {}
+                    for rel_type, targets in rel_obj.items():
+                        if rel_type not in type_map or not isinstance(targets, list):
+                            continue
+                        rel_label = type_map[rel_type]
+                        for target in targets:
+                            if not isinstance(target, dict):
+                                continue
+                            tgt_final, _ = _find_or_create_relation_name(target.get("食物名称"), valid_names)
+                            if not tgt_final:
+                                continue
+                            key = (src_final, rel_label, tgt_final)
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            desc = str(target.get("描述") or "").strip()
+                            if key not in existing_map:
+                                create_count += 1
+                                if len(diffs) < 20:
+                                    diffs.append({"name": f"{src_final}->{tgt_final}", "action": "create", "changed_fields": [rel_label]})
+                            elif existing_map[key] != desc:
+                                update_count += 1
+                                if len(diffs) < 20:
+                                    diffs.append({"name": f"{src_final}->{tgt_final}", "action": "update", "changed_fields": ["desc"]})
+                            else:
+                                skip_count += 1
+
+        return {
+            "input_groups": len(data.keys()),
+            "deduped_relations": len(seen),
+            "will_create": create_count,
+            "will_update": update_count,
+            "will_skip": skip_count,
+            "diff_samples": diffs,
+        }
+
+
+class AdminImportTaskListView(APIView):
+    """导入任务日志列表"""
+    def get(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        limit = int(request.query_params.get("limit", 20) or 20)
+        if limit < 1:
+            limit = 20
+        if limit > 100:
+            limit = 100
+
+        rows = graph_db.query(
+            """
+            MATCH (t:ImportTask)
+            RETURN t.id AS id,
+                   t.import_type AS import_type,
+                   t.source AS source,
+                   coalesce(t.file_path, '') AS file_path,
+                   coalesce(t.file_name, '') AS file_name,
+                   t.status AS status,
+                   t.started_at AS started_at,
+                   coalesce(t.ended_at, '') AS ended_at,
+                   coalesce(t.duration_ms, 0) AS duration_ms,
+                   coalesce(t.stats_json, '{}') AS stats_json,
+                   coalesce(t.error, '') AS error
+            ORDER BY t.started_at DESC
+            LIMIT $limit
+            """,
+            {"limit": limit},
+        )
+        for r in rows:
+            try:
+                r["stats"] = json.loads(r.get("stats_json") or "{}")
+            except Exception:
+                r["stats"] = {}
+            r.pop("stats_json", None)
+        return Response({"tasks": rows})
+
+
+class AdminImportRollbackView(APIView):
+    """一键回滚最近一次关系导入（第一版）"""
+    def post(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        task_id = str(request.data.get("task_id", "")).strip()
+        if task_id:
+            task_rows = graph_db.query(
+                "MATCH (t:ImportTask {id: $task_id}) RETURN t.id AS id, t.import_type AS import_type, t.status AS status",
+                {"task_id": task_id},
+            )
+        else:
+            task_rows = graph_db.query(
+                """
+                MATCH (t:ImportTask {import_type: 'relation', status: 'success'})
+                RETURN t.id AS id, t.import_type AS import_type, t.status AS status
+                ORDER BY t.started_at DESC
+                LIMIT 1
+                """
+            )
+
+        if not task_rows:
+            return Response({"error": "未找到可回滚的关系导入任务"}, status=404)
+
+        row = task_rows[0]
+        if row.get("import_type") != "relation" or row.get("status") != "success":
+            return Response({"error": "仅支持回滚成功的关系导入任务"}, status=400)
+
+        target_task_id = row.get("id")
+
+        deleted_rel = graph_db.query(
+            """
+            MATCH ()-[r:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO {import_task_id: $task_id}]->()
+            WITH count(r) AS c
+            MATCH ()-[r2:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO {import_task_id: $task_id}]->()
+            DELETE r2
+            RETURN c AS deleted
+            """,
+            {"task_id": target_task_id},
+        )
+        deleted_rel_count = int((deleted_rel[0] if deleted_rel else {}).get("deleted", 0) or 0)
+
+        deleted_nodes = graph_db.query(
+            """
+            MATCH (i:Ingredient {created_by_import_task: $task_id})
+            WHERE NOT (i)-[:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]-(:Ingredient)
+              AND NOT (i)<-[:CONTAINS]-(:Recipe)
+            WITH collect(i) AS nodes, count(i) AS c
+            FOREACH (n IN nodes | DELETE n)
+            RETURN c AS deleted
+            """,
+            {"task_id": target_task_id},
+        )
+        deleted_node_count = int((deleted_nodes[0] if deleted_nodes else {}).get("deleted", 0) or 0)
+
+        graph_db.query(
+            "MATCH (t:ImportTask {id: $task_id}) SET t.rollback_at = $ts, t.rollback_status = 'done'",
+            {"task_id": target_task_id, "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+        )
+
+        return Response({
+            "status": "success",
+            "rollback_task_id": target_task_id,
+            "deleted_relations": deleted_rel_count,
+            "deleted_new_nodes": deleted_node_count,
+        })
+
+
+class AdminDataQualityView(APIView):
+    """数据质量巡检"""
+    def get(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        checks = {
+            "ingredients_missing_original_name": "MATCH (i:Ingredient) WHERE i.original_name IS NULL OR trim(toString(i.original_name)) = '' RETURN count(i) AS v",
+            "ingredients_missing_nutrients_raw": "MATCH (i:Ingredient) WHERE i.nutrients_raw IS NULL OR trim(toString(i.nutrients_raw)) = '' RETURN count(i) AS v",
+            "recipes_missing_nutrients_raw": "MATCH (r:Recipe) WHERE r.nutrients_raw IS NULL OR trim(toString(r.nutrients_raw)) = '' RETURN count(r) AS v",
+            "ingredients_missing_info_flag": "MATCH (i:Ingredient) WHERE coalesce(i.missing_info, false) = true RETURN count(i) AS v",
+            "duplicate_ingredient_names": "MATCH (i:Ingredient) WITH i.name AS name, count(i) AS c WHERE c > 1 RETURN count(name) AS v",
+            "duplicate_recipe_names": "MATCH (r:Recipe) WITH r.name AS name, count(r) AS c WHERE c > 1 RETURN count(name) AS v",
+            "orphan_ingredients": "MATCH (i:Ingredient) WHERE NOT (i)<-[:CONTAINS]-(:Recipe) AND NOT (i)-[:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]-(:Ingredient) RETURN count(i) AS v",
+            "abnormal_self_relations": "MATCH (i:Ingredient)-[r:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]->(i) RETURN count(r) AS v",
+            "abnormal_empty_relation_desc": "MATCH (:Ingredient)-[r:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]->(:Ingredient) WHERE r.desc IS NULL OR trim(toString(r.desc)) = '' RETURN count(r) AS v",
+        }
+
+        result = {}
+        for k, q in checks.items():
+            row = graph_db.query(q)
+            result[k] = int((row[0] if row else {}).get("v", 0) or 0)
+
+        suggestions = []
+        if result["ingredients_missing_info_flag"] > 0:
+            suggestions.append("可执行一键修复：补全 missing_info=true 的食材默认字段")
+        if result["abnormal_empty_relation_desc"] > 0:
+            suggestions.append("可执行一键修复：为空关系补默认描述")
+        if not suggestions:
+            suggestions.append("当前未发现高优先级质量问题")
+
+        return Response({"status": "success", "checks": result, "suggestions": suggestions})
+
+
+class AdminDataQualityFixView(APIView):
+    """数据质量一键修复"""
+    def post(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        action = str(request.data.get("action", "fix_missing_info")).strip()
+        if action == "fix_missing_info":
+            rows = graph_db.query(
+                """
+                MATCH (i:Ingredient)
+                WHERE coalesce(i.missing_info, false) = true
+                WITH collect(i) AS nodes, count(i) AS c
+                FOREACH (n IN nodes |
+                    SET n.original_name = coalesce(n.original_name, n.name),
+                        n.category = coalesce(n.category, 'Other'),
+                        n.nutrient_count = coalesce(n.nutrient_count, 0),
+                        n.unit_info = coalesce(n.unit_info, '[]'),
+                        n.nutrients_raw = coalesce(n.nutrients_raw, '{}'),
+                        n.missing_info = false,
+                        n.updated_at = $ts
+                )
+                RETURN c AS fixed
+                """,
+                {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+            )
+            fixed = int((rows[0] if rows else {}).get("fixed", 0) or 0)
+            return Response({"status": "success", "action": action, "fixed_count": fixed})
+
+        if action == "fill_empty_relation_desc":
+            rows = graph_db.query(
+                """
+                MATCH (:Ingredient)-[r:CLASH_WITH|COMPLEMENT_WITH|SIMILAR_TO]->(:Ingredient)
+                WHERE r.desc IS NULL OR trim(toString(r.desc)) = ''
+                WITH collect(r) AS rels, count(r) AS c
+                FOREACH (x IN rels | SET x.desc = '系统自动补全：未提供说明')
+                RETURN c AS fixed
+                """
+            )
+            fixed = int((rows[0] if rows else {}).get("fixed", 0) or 0)
+            return Response({"status": "success", "action": action, "fixed_count": fixed})
+
+        return Response({"error": "不支持的修复动作"}, status=400)
+
+
+class AdminUserAuditView(APIView):
+    """用户行为审计（支持按日期过滤）"""
+    def get(self, request):
+        if not _validate_admin_token(request):
+            return Response({"error": "管理员认证失败，请重新登录"}, status=401)
+
+        end_date = str(request.query_params.get("end_date") or datetime.now().strftime("%Y-%m-%d"))
+        start_date = str(request.query_params.get("start_date") or (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"))
+
+        active_log_rows = graph_db.query(
+            "MATCH (u:User)-[:HAS_LOG]->(l:DietLog) WHERE l.date >= $start AND l.date <= $end RETURN count(DISTINCT u) AS v",
+            {"start": start_date, "end": end_date},
+        )
+        active_chat_rows = graph_db.query(
+            "MATCH (u:User)-[:HAS_CHAT]->(s:ChatSession) WHERE substring(coalesce(s.created_at, ''), 0, 10) >= $start AND substring(coalesce(s.created_at, ''), 0, 10) <= $end RETURN count(DISTINCT u) AS v",
+            {"start": start_date, "end": end_date},
+        )
+
+        usage_rows = graph_db.query(
+            """
+            MATCH (u:User)
+            OPTIONAL MATCH (u)-[:HAS_LOG]->(l:DietLog)
+              WHERE l.date >= $start AND l.date <= $end
+            OPTIONAL MATCH (u)-[:HAS_CHAT]->(s:ChatSession)
+              WHERE substring(coalesce(s.created_at, ''), 0, 10) >= $start AND substring(coalesce(s.created_at, ''), 0, 10) <= $end
+            OPTIONAL MATCH (u)-[:COLLECTED]->(c:Collection)
+            RETURN u.id AS user_id,
+                   count(DISTINCT l) AS log_count,
+                   count(DISTINCT s) AS chat_count,
+                   count(DISTINCT c) AS collect_count
+            ORDER BY (count(DISTINCT l) + count(DISTINCT s)) DESC
+            LIMIT 20
+            """,
+            {"start": start_date, "end": end_date},
+        )
+
+        failed_rows = graph_db.query(
+            "MATCH (t:ImportTask) WHERE t.status = 'failed' AND substring(coalesce(t.started_at, ''), 0, 10) >= $start AND substring(coalesce(t.started_at, ''), 0, 10) <= $end RETURN count(t) AS v",
+            {"start": start_date, "end": end_date},
+        )
+
+        feature_usage = {
+            "diet_log_entries": sum(int(r.get("log_count", 0) or 0) for r in usage_rows),
+            "chat_sessions": sum(int(r.get("chat_count", 0) or 0) for r in usage_rows),
+            "collections": sum(int(r.get("collect_count", 0) or 0) for r in usage_rows),
+        }
+
+        return Response({
+            "status": "success",
+            "period": {"start_date": start_date, "end_date": end_date},
+            "active_users": {
+                "by_diet_log": int((active_log_rows[0] if active_log_rows else {}).get("v", 0) or 0),
+                "by_chat": int((active_chat_rows[0] if active_chat_rows else {}).get("v", 0) or 0),
+            },
+            "feature_usage": feature_usage,
+            "failed_requests_recorded": int((failed_rows[0] if failed_rows else {}).get("v", 0) or 0),
+            "top_users": usage_rows,
+        })
 
 # 用户资料填写接口
 class UserProfileView(APIView):
