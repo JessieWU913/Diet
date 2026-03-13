@@ -14,10 +14,11 @@
           <input
             type="text"
             v-model="userId"
-            placeholder="请输入账号"
+            placeholder="仅支持字母/数字/-/_"
             required
             class="form-control"
           />
+          <small v-if="!isAdminMode" class="id-rule">注册时仅允许字母、数字、短横杠(-)和下划线(_)</small>
         </div>
 
         <div v-if="!isLoginMode && !isAdminMode" class="form-group">
@@ -142,6 +143,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (!isAdminMode.value && !isLoginMode.value && !/^[A-Za-z0-9_-]+$/.test(cleanUserId)) {
+    alert('User ID 仅允许字母、数字、短横杠(-)和下划线(_)')
+    return
+  }
+
   if (!isLoginMode.value && cleanPassword !== cleanConfirm) {
     alert('两次输入的密码不一致，请重新输入！')
     return
@@ -233,6 +239,7 @@ const handleSubmit = async () => {
 }
 .form-group { text-align: left; margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #34495e; font-size: 14px; }
+.id-rule { display: block; margin-top: 6px; color: #7f8c8d; font-size: 12px; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 15px; box-sizing: border-box; outline: none; transition: border 0.2s; }
 .form-control:focus { border-color: #7761e5; }
 .password-wrap { position: relative; }

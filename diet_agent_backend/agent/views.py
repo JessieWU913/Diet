@@ -272,6 +272,10 @@ class UserAuthView(APIView):
         if not user_id or not password:
             return Response({"error": "账号和密码不能为空"}, status=400)
 
+        # 注册账号仅允许字母、数字、短横杠、下划线
+        if action == 'register' and not re.fullmatch(r"[A-Za-z0-9_-]+", user_id):
+            return Response({"error": "User ID 仅允许字母、数字、短横杠(-)和下划线(_)"}, status=400)
+
         if action == 'register':
             check_cypher = "MATCH (u:User {id: $user_id}) RETURN u"
             existing_user = graph_db.query(check_cypher, {"user_id": user_id})
