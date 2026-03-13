@@ -17,9 +17,9 @@
       <p class="import-desc">
         上传 JSON 文件并选择导入类型：食材、菜谱或食材关系。系统会做去重导入并补全可补全字段。
       </p>
-      <p class="import-tip">目录不受限制，你可以从任意本地目录选择 JSON 文件。</p>
+      <p class="import-tip">目录不受限制。推荐填入真实绝对路径并直接导入；也支持上传文件导入。</p>
 
-      <div class="import-form-row">
+      <div class="import-form-row full-width">
         <label class="import-label">导入类型</label>
         <select v-model="importType" class="import-select" :disabled="importing">
           <option value="ingredient">食材 JSON</option>
@@ -28,21 +28,34 @@
         </select>
       </div>
 
-      <div class="import-form-row">
+      <div class="import-form-row full-width">
+        <label class="import-label">真实文件路径（优先使用）</label>
+        <input
+          v-model.trim="absolutePath"
+          class="path-input"
+          :disabled="importing"
+          placeholder="例如：/Users/wujieqian/Desktop/毕业设计/final_data_bohee/recipes_final.json"
+        />
+      </div>
+
+      <div class="import-form-row full-width">
         <label class="import-label">选择文件</label>
-        <input class="import-file" type="file" accept="application/json,.json" @change="onFileChange" :disabled="importing" />
+        <div class="file-picker-wrap">
+          <input ref="fileInputRef" class="import-file-hidden" type="file" accept="application/json,.json" @change="onFileChange" :disabled="importing" />
+          <button type="button" class="ui-btn ghost" :disabled="importing" @click="openFilePicker">选择 JSON 文件</button>
+          <span class="file-name">{{ importFile ? importFile.name : '未选择文件' }}</span>
+        </div>
       </div>
 
       <div class="import-actions">
-        <button class="ui-btn accent" :disabled="importing || !importFile" @click="submitImport">
+        <button class="ui-btn accent" :disabled="importing || (!importFile && !absolutePath)" @click="submitImport">
           {{ importing ? '导入中...' : '开始导入' }}
         </button>
-        <span v-if="importFile" class="file-name">{{ importFile.name }}</span>
       </div>
 
-      <div class="path-box" v-if="selectedPath">
-        <div class="path-label">已选择路径</div>
-        <div class="path-value">{{ selectedPath }}</div>
+      <div class="path-box" v-if="selectedPath || absolutePath">
+        <div class="path-label">当前用于导入的路径</div>
+        <div class="path-value">{{ absolutePath || selectedPath }}</div>
       </div>
 
       <div v-if="importResult" class="import-result">
@@ -166,6 +179,8 @@ const importFile = ref(null)
 const importing = ref(false)
 const importResult = ref(null)
 const selectedPath = ref('')
+const absolutePath = ref('')
+const fileInputRef = ref(null)
 const activeTab = computed(() => (route.name === 'AdminUpdate' ? 'update' : 'overview'))
 
 const activeUser = computed(() => users.value.find((u) => u.user_id === activeUserId.value) || null)
@@ -187,7 +202,11 @@ const selectUser = (u) => {
 const onFileChange = (e) => {
   const f = e?.target?.files?.[0]
   importFile.value = f || null
-  selectedPath.value = e?.target?.value || f?.webkitRelativePath || f?.name || ''
+  selectedPath.value = absolutePath.value || f?.name || ''
+}
+
+const openFilePicker = () => {
+  if (fileInputRef.value) fileInputRef.value.click()
 }
 
 const submitImport = async () => {
@@ -196,8 +215,8 @@ const submitImport = async () => {
     errorText.value = '管理员登录已失效，请重新登录'
     return
   }
-  if (!importFile.value) {
-    errorText.value = '请先选择 JSON 文件'
+  if (!importFile.value && !absolutePath.value) {
+    errorText.value = '请先填写真实路径或选择 JSON 文件'
     return
   }
 
@@ -207,7 +226,12 @@ const submitImport = async () => {
   try {
     const fd = new FormData()
     fd.append('import_type', importType.value)
-    fd.append('file', importFile.value)
+    if (absolutePath.value) {
+      fd.append('file_path', absolutePath.value)
+    }
+    if (importFile.value) {
+      fd.append('file', importFile.value)
+    }
     const res = await API.post('/admin/import-json/', fd, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -215,6 +239,7 @@ const submitImport = async () => {
       }
     })
     importResult.value = res.data
+    selectedPath.value = res?.data?.file_path || absolutePath.value || importFile.value?.name || ''
     await loadOverview()
   } catch (e) {
     errorText.value = e?.response?.data?.error || '导入失败'
@@ -279,6 +304,12 @@ onMounted(() => {
   color: #fff;
 }
 
+.ui-btn.ghost {
+  background: #fff;
+  color: #1f5468;
+  border: 1px solid #c9dbe6;
+}
+
 .ui-btn:disabled { opacity: .65; cursor: not-allowed; }
 
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -296,23 +327,64 @@ onMounted(() => {
 .import-desc { margin: 0 0 6px; color: #40535d; }
 .import-tip { margin: 0 0 12px; color: #6b7f8d; font-size: 13px; }
 .import-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.import-label { min-width: 72px; color: #40535d; font-weight: 600; }
-.import-select, .import-file {
-  border: 1px solid #cfe0eb;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 14px;
-  background: #fff;
+.import-form-row.full-width {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
-.import-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.file-name { color: #60707d; font-size: 13px; }
+.import-label { color: #40535d; font-weight: 700; font-size: 15px; }
+.import-select, .path-input {
+  border: 1px solid #cfe0eb;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 16px;
+  background: #fff;
+  width: 100%;
+}
+
+.file-picker-wrap {
+  width: 100%;
+  border: 1px solid #cfe0eb;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.import-file-hidden {
+  display: none;
+}
+
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.import-actions .ui-btn.accent {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  font-size: 17px;
+}
+
+.file-name {
+  color: #60707d;
+  font-size: 15px;
+  font-weight: 600;
+}
 
 .path-box {
   margin-top: 10px;
   border: 1px solid #dde8ef;
-  border-radius: 10px;
+  border-radius: 14px;
   background: #f8fbfd;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  width: 100%;
 }
 
 .path-label { font-size: 12px; color: #6a7d8a; margin-bottom: 4px; }
@@ -325,8 +397,9 @@ onMounted(() => {
   margin-top: 12px;
   border: 1px solid #dceaf3;
   background: #f8fcff;
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  width: 100%;
 }
 .import-result ul { margin: 0; padding-left: 18px; }
 .import-result li { margin-bottom: 4px; color: #1f2e38; }

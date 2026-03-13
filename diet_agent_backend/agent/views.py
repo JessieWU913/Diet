@@ -418,13 +418,24 @@ class AdminDataImportView(APIView):
 
         import_type = str(request.data.get("import_type", "")).strip().lower()
         upload = request.FILES.get("file")
+        file_path = str(request.data.get("file_path", "")).strip()
         if import_type not in {"ingredient", "recipe", "relation"}:
             return Response({"error": "import_type 必须是 ingredient / recipe / relation"}, status=400)
-        if not upload:
-            return Response({"error": "请上传 JSON 文件"}, status=400)
+        if not upload and not file_path:
+            return Response({"error": "请上传 JSON 文件，或填写服务器可读的 JSON 绝对路径"}, status=400)
 
         try:
-            raw_text = upload.read().decode("utf-8-sig")
+            if file_path:
+                if not os.path.isabs(file_path):
+                    return Response({"error": "file_path 必须是绝对路径"}, status=400)
+                if not file_path.lower().endswith(".json"):
+                    return Response({"error": "file_path 必须指向 .json 文件"}, status=400)
+                if not os.path.exists(file_path):
+                    return Response({"error": f"文件不存在: {file_path}"}, status=400)
+                with open(file_path, "r", encoding="utf-8-sig") as f:
+                    raw_text = f.read()
+            else:
+                raw_text = upload.read().decode("utf-8-sig")
             payload = json.loads(raw_text)
         except Exception as e:
             return Response({"error": f"JSON 解析失败: {e}"}, status=400)
@@ -437,7 +448,13 @@ class AdminDataImportView(APIView):
             else:
                 stats = self._import_relations(payload)
 
-            return Response({"status": "success", "import_type": import_type, "stats": stats})
+            return Response({
+                "status": "success",
+                "import_type": import_type,
+                "source": "path" if file_path else "upload",
+                "file_path": file_path,
+                "stats": stats,
+            })
         except Exception as e:
             return Response({"error": f"导入失败: {e}"}, status=500)
 
