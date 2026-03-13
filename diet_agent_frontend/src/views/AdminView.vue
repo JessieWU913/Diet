@@ -17,7 +17,7 @@
       <p class="import-desc">
         上传 JSON 文件并选择导入类型：食材、菜谱或食材关系。系统会做去重导入并补全可补全字段。
       </p>
-      <p class="import-tip">目录不受限制。推荐填入真实绝对路径并直接导入；也支持上传文件导入。</p>
+      <p class="import-tip">目录不受限制。请填写真实绝对路径导入（必填）。</p>
 
       <div class="import-form-row full-width">
         <label class="import-label">导入类型</label>
@@ -48,14 +48,14 @@
       </div>
 
       <div class="import-actions">
-        <button class="ui-btn accent" :disabled="importing || (!importFile && !absolutePath)" @click="submitImport">
+        <button class="ui-btn accent" :disabled="importing || !absolutePath" @click="submitImport">
           {{ importing ? '导入中...' : '开始导入' }}
         </button>
       </div>
 
-      <div class="path-box" v-if="selectedPath || absolutePath">
+      <div class="path-box" v-if="absolutePath">
         <div class="path-label">当前用于导入的路径</div>
-        <div class="path-value">{{ absolutePath || selectedPath }}</div>
+        <div class="path-value">{{ absolutePath }}</div>
       </div>
 
       <div v-if="importResult" class="import-result">
@@ -202,7 +202,7 @@ const selectUser = (u) => {
 const onFileChange = (e) => {
   const f = e?.target?.files?.[0]
   importFile.value = f || null
-  selectedPath.value = absolutePath.value || f?.name || ''
+  selectedPath.value = ''
 }
 
 const openFilePicker = () => {
@@ -215,8 +215,8 @@ const submitImport = async () => {
     errorText.value = '管理员登录已失效，请重新登录'
     return
   }
-  if (!importFile.value && !absolutePath.value) {
-    errorText.value = '请先填写真实路径或选择 JSON 文件'
+  if (!absolutePath.value) {
+    errorText.value = '请先填写真实 JSON 绝对路径'
     return
   }
 
@@ -226,9 +226,7 @@ const submitImport = async () => {
   try {
     const fd = new FormData()
     fd.append('import_type', importType.value)
-    if (absolutePath.value) {
-      fd.append('file_path', absolutePath.value)
-    }
+    fd.append('file_path', absolutePath.value)
     if (importFile.value) {
       fd.append('file', importFile.value)
     }
