@@ -1377,6 +1377,19 @@ class UserProfileView(APIView):
         except ValueError:
             height, weight = 0.0, 0.0
 
+        try:
+            target_weight = float(request.data.get("targetWeight") or 0)
+        except ValueError:
+            target_weight = 0.0
+
+        try:
+            fat_loss_weeks = int(request.data.get("fatLossWeeks") or 0)
+        except ValueError:
+            fat_loss_weeks = 0
+
+        if fat_loss_weeks < 0:
+            fat_loss_weeks = 0
+
         allergies = request.data.get("allergies", [])
         dislikes = request.data.get("dislikes", [])
 
@@ -1390,7 +1403,17 @@ class UserProfileView(APIView):
             u.weight = $weight, 
             u.birth_date = $birth_date,
             u.allergies = $allergies, 
-            u.dislikes = $dislikes
+                        u.dislikes = $dislikes,
+                        u.target_weight = $target_weight,
+                        u.fat_loss_weeks = $fat_loss_weeks,
+                        u.initial_weight = CASE
+                            WHEN u.initial_weight IS NULL OR toFloat(u.initial_weight) <= 0 THEN CASE WHEN $weight > 0 THEN $weight ELSE u.initial_weight END
+                            ELSE u.initial_weight
+                        END,
+                        u.fat_loss_start_date = CASE
+                            WHEN $fat_loss_weeks > 0 AND (u.fat_loss_start_date IS NULL OR trim(toString(u.fat_loss_start_date)) = '') THEN $today
+                            ELSE u.fat_loss_start_date
+                        END
         RETURN u
         """
         try:
@@ -1401,7 +1424,10 @@ class UserProfileView(APIView):
                 "weight": weight,
                 "birth_date": birth_date,
                 "allergies": allergies,
-                "dislikes": dislikes
+                                "dislikes": dislikes,
+                                "target_weight": target_weight,
+                                "fat_loss_weeks": fat_loss_weeks,
+                                "today": datetime.now().strftime("%Y-%m-%d")
             })
             return Response({"status": "success", "message": "画像更新成功"})
         except Exception as e:
@@ -1418,6 +1444,10 @@ class UserProfileView(APIView):
         RETURN coalesce(u.gender, 'female') AS gender, 
                coalesce(u.height, 0) AS height, 
                coalesce(u.weight, 0) AS weight, 
+             coalesce(u.initial_weight, 0) AS initialWeight,
+             coalesce(u.target_weight, 0) AS targetWeight,
+             coalesce(u.fat_loss_weeks, 0) AS fatLossWeeks,
+             coalesce(u.fat_loss_start_date, "") AS fatLossStartDate,
                coalesce(u.allergies, []) AS allergies, 
                coalesce(u.dislikes, []) AS dislikes, 
                coalesce(u.positive_feedback, []) AS positive_feedback,

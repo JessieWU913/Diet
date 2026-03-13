@@ -2,6 +2,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import LoginView from '../views/LoginView.vue'
+import HomeView from '../views/HomeView.vue'
 import DietLogView from '../views/DietLogView.vue'
 import RecipeView from '../views/RecipeView.vue'
 import StatsView from '../views/StatsView.vue'
@@ -12,8 +13,9 @@ import IngredientSearchView from '../views/IngredientSearchView.vue'
 import AdminView from '../views/AdminView.vue'
 
 const routes = [
-  { path: '/', redirect: '/diet-log' },
+  { path: '/', redirect: '/home' },
   { path: '/login', name: 'Login', component: LoginView },
+  { path: '/home', name: 'Home', component: HomeView, meta: { requiresAuth: true } },
   { path: '/diet-log', name: 'DietLog', component: DietLogView, meta: { requiresAuth: true } },
   { path: '/recipes', name: 'Recipes', component: RecipeView, meta: { requiresAuth: true } },
   { path: '/stats', name: 'Stats', component: StatsView, meta: { requiresAuth: true } },
@@ -42,7 +44,7 @@ router.beforeEach((to, from, next) => {
   } else if (to.name === 'Login' && isAdmin && adminToken) {
     next({ name: 'Admin' })
   } else if (to.name === 'Login' && isAuthenticated) {
-    next({ name: 'DietLog' })
+    next({ name: 'Home' })
   } else {
     next()
   }

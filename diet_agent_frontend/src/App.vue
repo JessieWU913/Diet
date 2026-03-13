@@ -18,6 +18,9 @@
         </template>
 
         <template v-else>
+        <router-link to="/home" class="nav-item">
+          <span class="nav-icon"></span><span>主页</span>
+        </router-link>
         <router-link to="/diet-log" class="nav-item">
           <span class="nav-icon"></span><span>饮食记录</span>
         </router-link>
@@ -98,6 +101,16 @@
                 <label>体重 (kg)</label>
                 <input type="number" v-model.number="profileForm.weight" placeholder="65" />
               </div>
+              <div class="pm-field">
+                <label>目标体重 (kg)</label>
+                <input type="number" v-model.number="profileForm.targetWeight" placeholder="55" />
+              </div>
+            </div>
+            <div class="pm-row">
+              <div class="pm-field">
+                <label>减脂时长 (周)</label>
+                <input type="number" min="0" v-model.number="profileForm.fatLossWeeks" placeholder="12" />
+              </div>
             </div>
 
             <div class="pm-field full">
@@ -161,7 +174,7 @@ const userInitial = computed(() => {
 
 const profileForm = ref({
   name: '', gender: 'female', birthDate: '', height: '', weight: '',
-  allergies: [], dislikes: []
+  targetWeight: '', fatLossWeeks: '', allergies: [], dislikes: []
 })
 
 const loadProfile = async () => {
@@ -173,6 +186,8 @@ const loadProfile = async () => {
       profileForm.value.birthDate = res.data.birthDate || ''
       profileForm.value.height = res.data.height || ''
       profileForm.value.weight = res.data.weight || ''
+      profileForm.value.targetWeight = res.data.targetWeight || ''
+      profileForm.value.fatLossWeeks = res.data.fatLossWeeks || ''
       profileForm.value.allergies = res.data.allergies || []
       profileForm.value.dislikes = res.data.dislikes || []
       recentPositiveFeedback.value = res.data.recent_positive_feedback || []
@@ -204,6 +219,8 @@ const saveProfile = async () => {
       gender: profileForm.value.gender,
       height: profileForm.value.height,
       weight: profileForm.value.weight,
+      targetWeight: profileForm.value.targetWeight,
+      fatLossWeeks: profileForm.value.fatLossWeeks,
       allergies: profileForm.value.allergies,
       dislikes: profileForm.value.dislikes
     })

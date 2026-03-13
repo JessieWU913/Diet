@@ -60,8 +60,16 @@
             <div class="msg-content" v-html="formatMessage(msg.answer || msg.content)"></div>
 
             <div v-if="msg.role === 'assistant' && idx > 0" class="msg-actions">
-              <button class="act-btn" :class="{ active: msg.feedback === 'up' }" @click="rate(msg, 'up')" :disabled="msg.feedbackSubmitted" title="点赞反馈">点赞</button>
-              <button class="act-btn" :class="{ active: msg.feedback === 'down' }" @click="rate(msg, 'down')" :disabled="msg.feedbackSubmitted" title="点踩反馈">点踩</button>
+              <button class="act-btn thumb-btn" :class="{ active: msg.feedback === 'up' }" @click="rate(msg, 'up')" :disabled="msg.feedbackSubmitted" title="点赞反馈" aria-label="点赞反馈">
+                <svg viewBox="0 0 24 24" class="thumb-icon" aria-hidden="true">
+                  <path d="M2 21h4V9H2v12zm20-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L13 1 6.59 7.41C6.22 7.78 6 8.3 6 8.83V19c0 1.1.9 2 2 2h9c.82 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V10z"/>
+                </svg>
+              </button>
+              <button class="act-btn thumb-btn" :class="{ active: msg.feedback === 'down' }" @click="rate(msg, 'down')" :disabled="msg.feedbackSubmitted" title="点踩反馈" aria-label="点踩反馈">
+                <svg viewBox="0 0 24 24" class="thumb-icon is-down" aria-hidden="true">
+                  <path d="M2 3h4v12H2V3zm20 11c0 1.1-.9 2-2 2h-6.31l.95 4.57.03.32c0 .41-.17.79-.44 1.06L13 23l-6.41-6.41A1.996 1.996 0 016 15.17V5c0-1.1.9-2 2-2h9c.82 0 1.54.5 1.84 1.22l3.02 7.05c.09.23.14.47.14.73V14z"/>
+                </svg>
+              </button>
               <button class="act-btn" @click="regenerateReply(idx)" :disabled="isLoading" title="重新生成这条回复">↻ 重新生成</button>
               <button class="act-btn" @click="copyMessage(msg)" title="复制这条回复">⧉ 复制</button>
               <button class="act-btn" @click="openExportModal(msg)" :disabled="(msg.detectedRecipeNames || []).length === 0" title="导出到食谱推荐页">⇪ 导出 {{ (msg.detectedRecipeNames || []).length > 0 ? `(${(msg.detectedRecipeNames || []).length})` : '' }}</button>
@@ -851,6 +859,25 @@ onMounted(() => {
 .act-btn:hover:not(:disabled) { background: #f7f9fc; border-color: #cfd8e6; }
 .act-btn.active { background: #eef3ff; border-color: #b9cbf7; color: #3f63c9; }
 .act-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.thumb-btn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.thumb-icon.is-down {
+  transform: rotate(0deg);
+}
 
 .reason-panel { margin-top: 10px; background: #f9fbfc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e1e8ed; }
 .reason-panel p { font-size: 12px; color: #2d3436; font-weight: 600; margin: 0 0 8px; }

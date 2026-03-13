@@ -1,202 +1,296 @@
 <template>
   <div class="stats-view">
     <div class="page-header">
-      <h2>营养分析</h2>
-      <div class="period-tabs">
-        <button v-for="p in periods" :key="p.days" :class="{ active: days === p.days }" @click="changePeriod(p.days)">{{ p.label }}</button>
+      <h2>数据分析</h2>
+      <div class="header-tools">
+        <label>
+          选择日期
+          <input type="date" v-model="selectedDate" />
+        </label>
       </div>
     </div>
 
-    <div class="today-row">
-      <div class="today-card" v-for="item in todaySummary" :key="item.label">
-        <span class="tc-icon">{{ item.icon }}</span>
-        <div class="tc-info">
-          <span class="tc-value">{{ item.value }}</span>
-          <span class="tc-label">{{ item.label }}</span>
+    <div class="ring-grid">
+      <section class="ring-card main">
+        <div class="ring-top">
+          <span>动态食谱</span>
+          <strong>{{ selectedDate }}</strong>
         </div>
-        <div class="tc-bar">
-          <div class="tc-fill" :style="{ width: item.pct + '%', background: item.color }"></div>
+
+        <div class="center-row">
+          <div class="side-col">
+            <div class="side-label">饮食摄入</div>
+            <div class="side-value">{{ dayTotals.calories }} kcal</div>
+          </div>
+
+          <div class="ring-wrap">
+            <div class="ring" :style="ringStyle">
+              <div class="ring-inner">
+                <div class="ring-title">还可以吃</div>
+                <div class="ring-value">{{ remainCalories }}</div>
+                <div class="ring-sub">推荐预算 {{ plan.calories }} kcal</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="side-col">
+            <div class="side-label">运动消耗</div>
+            <div class="side-value">0 kcal</div>
+          </div>
         </div>
-        <span class="tc-goal">/ {{ item.goal }}{{ item.unit }}</span>
-      </div>
-    </div>
 
-    <div class="charts-row">
-      <div class="chart-card">
-        <h3>每日热量摄入趋势</h3>
-        <div ref="calorieChartRef" class="chart-box"></div>
-      </div>
-      <div class="chart-card">
-        <h3>宏量营养素分布</h3>
-        <div ref="macroChartRef" class="chart-box"></div>
-      </div>
-    </div>
+        <div class="macro-row">
+          <div class="macro-item">
+            <div class="macro-name">碳水化合物</div>
+            <div class="macro-num">{{ dayTotals.carbs }} / {{ plan.carbs }} 克</div>
+            <div class="macro-bar"><span :style="{ width: macroPct(dayTotals.carbs, plan.carbs) + '%' }"></span></div>
+          </div>
+          <div class="macro-item">
+            <div class="macro-name">蛋白质</div>
+            <div class="macro-num">{{ dayTotals.protein }} / {{ plan.protein }} 克</div>
+            <div class="macro-bar"><span :style="{ width: macroPct(dayTotals.protein, plan.protein) + '%' }"></span></div>
+          </div>
+          <div class="macro-item">
+            <div class="macro-name">脂肪</div>
+            <div class="macro-num">{{ dayTotals.fat }} / {{ plan.fat }} 克</div>
+            <div class="macro-bar"><span :style="{ width: macroPct(dayTotals.fat, plan.fat) + '%' }"></span></div>
+          </div>
+        </div>
+      </section>
 
-    <div class="charts-row">
-      <div class="chart-card wide">
-        <h3>蛋白质 / 脂肪 / 碳水趋势对比</h3>
-        <div ref="trendChartRef" class="chart-box"></div>
-      </div>
+      <section class="ring-card info">
+        <h3>今日预算依据</h3>
+        <ul>
+          <li>年龄：{{ profileAge }} 岁</li>
+          <li>性别：{{ profile.gender === 'male' ? '男' : '女' }}</li>
+          <li>身高：{{ profile.height || 0 }} cm</li>
+          <li>当前体重：{{ profile.weight || 0 }} kg</li>
+          <li>目标体重：{{ profile.targetWeight || 0 }} kg</li>
+          <li>减脂时长：{{ profile.fatLossWeeks || 0 }} 周</li>
+          <li>BMR：{{ plan.bmr }} kcal</li>
+          <li>TDEE：{{ plan.tdee }} kcal</li>
+          <li>建议缺口：{{ plan.deficit }} kcal/天</li>
+        </ul>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
 import API from '../api.js'
 
 const userId = localStorage.getItem('user_id') || ''
-const days = ref(7)
-const periods = [
-  { days: 3, label: '近3天' },
-  { days: 7, label: '近7天' },
-  { days: 14, label: '近14天' },
-  { days: 30, label: '近30天' },
-]
+const selectedDate = ref(new Date().toISOString().split('T')[0])
 
-const calorieChartRef = ref(null)
-const macroChartRef = ref(null)
-const trendChartRef = ref(null)
-let calorieChart = null
-let macroChart = null
-let trendChart = null
-
-const rawData = ref([])
-
-// 目标（简易，可从后端个人信息获取）
-const goals = { calories: 2000, protein: 60, fat: 65, carbs: 250 }
-
-const todaySummary = ref([])
-
-const buildTodaySummary = () => {
-  const today = new Date().toISOString().split('T')[0]
-  const todayData = rawData.value.find(d => d.date === today) || { calories: 0, protein: 0, fat: 0, carbs: 0 }
-  todaySummary.value = [
-    { icon: '', label: '热量', value: Math.round(todayData.calories), goal: goals.calories, unit: 'kcal', pct: Math.min(100, (todayData.calories / goals.calories) * 100), color: '#ff6b6b' },
-    { icon: '', label: '蛋白质', value: Math.round(todayData.protein), goal: goals.protein, unit: 'g', pct: Math.min(100, (todayData.protein / goals.protein) * 100), color: '#4ecdc4' },
-    { icon: '', label: '脂肪', value: Math.round(todayData.fat), goal: goals.fat, unit: 'g', pct: Math.min(100, (todayData.fat / goals.fat) * 100), color: '#ffd93d' },
-    { icon: '', label: '碳水', value: Math.round(todayData.carbs), goal: goals.carbs, unit: 'g', pct: Math.min(100, (todayData.carbs / goals.carbs) * 100), color: '#6c5ce7' },
-  ]
-}
-
-const loadData = async () => {
-  try {
-    const res = await API.get(`/nutrition-summary/?user_id=${userId}&days=${days.value}`)
-    rawData.value = res.data.summary || []
-  } catch (e) { console.error(e) }
-  buildTodaySummary()
-  await nextTick()
-  renderCharts()
-}
-
-const changePeriod = (d) => {
-  days.value = d
-  loadData()
-}
-
-const renderCharts = () => {
-  const dates = rawData.value.map(d => d.date)
-  const cals = rawData.value.map(d => Math.round(d.calories))
-  const proteins = rawData.value.map(d => Math.round(d.protein))
-  const fats = rawData.value.map(d => Math.round(d.fat))
-  const carbs = rawData.value.map(d => Math.round(d.carbs))
-
-  // 热量柱状图
-  if (calorieChartRef.value) {
-    if (!calorieChart) calorieChart = echarts.init(calorieChartRef.value)
-    calorieChart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 11 } },
-      yAxis: { type: 'value', name: 'kcal' },
-      series: [
-        { data: cals, type: 'bar', itemStyle: { color: '#ff6b6b', borderRadius: [6, 6, 0, 0] }, barMaxWidth: 36 },
-        { data: Array(dates.length).fill(goals.calories), type: 'line', lineStyle: { type: 'dashed', color: '#dfe6e9' }, symbol: 'none', name: '目标' }
-      ],
-      grid: { top: 30, bottom: 30, left: 50, right: 20 }
-    })
-  }
-
-  // 宏量营养素圆环
-  const totalP = proteins.reduce((a, b) => a + b, 0)
-  const totalF = fats.reduce((a, b) => a + b, 0)
-  const totalC = carbs.reduce((a, b) => a + b, 0)
-  if (macroChartRef.value) {
-    if (!macroChart) macroChart = echarts.init(macroChartRef.value)
-    macroChart.setOption({
-      tooltip: { trigger: 'item', formatter: '{b}: {c}g ({d}%)' },
-      legend: { bottom: 0, textStyle: { fontSize: 12 } },
-      series: [{
-        type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'],
-        label: { show: false },
-        data: [
-          { value: totalP, name: '蛋白质', itemStyle: { color: '#4ecdc4' } },
-          { value: totalF, name: '脂肪', itemStyle: { color: '#ffd93d' } },
-          { value: totalC, name: '碳水', itemStyle: { color: '#6c5ce7' } },
-        ]
-      }]
-    })
-  }
-
-  // 三线趋势
-  if (trendChartRef.value) {
-    if (!trendChart) trendChart = echarts.init(trendChartRef.value)
-    trendChart.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['蛋白质', '脂肪', '碳水'], bottom: 0 },
-      xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 11 } },
-      yAxis: { type: 'value', name: 'g' },
-      series: [
-        { name: '蛋白质', data: proteins, type: 'line', smooth: true, lineStyle: { color: '#4ecdc4' }, itemStyle: { color: '#4ecdc4' } },
-        { name: '脂肪', data: fats, type: 'line', smooth: true, lineStyle: { color: '#ffd93d' }, itemStyle: { color: '#ffd93d' } },
-        { name: '碳水', data: carbs, type: 'line', smooth: true, lineStyle: { color: '#6c5ce7' }, itemStyle: { color: '#6c5ce7' } },
-      ],
-      grid: { top: 30, bottom: 40, left: 50, right: 20 }
-    })
-  }
-}
-
-const handleResize = () => {
-  calorieChart?.resize()
-  macroChart?.resize()
-  trendChart?.resize()
-}
-
-onMounted(() => {
-  loadData()
-  window.addEventListener('resize', handleResize)
+const profile = ref({
+  gender: 'female',
+  birthDate: '',
+  height: 0,
+  weight: 0,
+  targetWeight: 0,
+  fatLossWeeks: 0,
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  calorieChart?.dispose()
-  macroChart?.dispose()
-  trendChart?.dispose()
+const dayTotals = ref({ calories: 0, protein: 0, fat: 0, carbs: 0 })
+
+const toInt = (v) => Math.max(0, Math.round(Number(v || 0)))
+
+const profileAge = computed(() => {
+  const b = profile.value.birthDate
+  if (!b) return 25
+  const birth = new Date(`${b}T00:00:00`)
+  if (Number.isNaN(birth.getTime())) return 25
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1
+  return Math.max(15, age)
+})
+
+const plan = computed(() => {
+  const weight = Number(profile.value.weight || 0) || 60
+  const target = Number(profile.value.targetWeight || 0) || weight
+  const height = Number(profile.value.height || 0) || 165
+  const age = profileAge.value
+
+  const isMale = profile.value.gender === 'male'
+  const bmrRaw = 10 * weight + 6.25 * height - 5 * age + (isMale ? 5 : -161)
+  const bmr = Math.max(900, Math.round(bmrRaw))
+
+  const tdee = Math.round(bmr * 1.35)
+
+  const loseKg = Math.max(0, weight - target)
+  const weeks = Math.max(1, Number(profile.value.fatLossWeeks || 0) || 8)
+  const deficitRaw = loseKg > 0 ? (loseKg * 7700) / (weeks * 7) : 0
+  const deficit = Math.min(900, Math.max(0, Math.round(deficitRaw)))
+
+  let calories = tdee - deficit
+  const minSafe = isMale ? 1400 : 1200
+  calories = Math.max(minSafe, calories)
+
+  const protein = Math.max(Math.round(weight * 1.6), Math.round((calories * 0.30) / 4))
+  const fat = Math.max(Math.round(weight * 0.8), Math.round((calories * 0.25) / 9))
+  const carbs = Math.max(60, Math.round((calories - protein * 4 - fat * 9) / 4))
+
+  return {
+    bmr: toInt(bmr),
+    tdee: toInt(tdee),
+    deficit: toInt(deficit),
+    calories: toInt(calories),
+    protein: toInt(protein),
+    fat: toInt(fat),
+    carbs: toInt(carbs)
+  }
+})
+
+const remainCalories = computed(() => {
+  const remain = plan.value.calories - toInt(dayTotals.value.calories)
+  return Math.max(0, remain)
+})
+
+const ringStyle = computed(() => {
+  const consumed = toInt(dayTotals.value.calories)
+  const ratio = Math.max(0, Math.min(1, consumed / Math.max(1, plan.value.calories)))
+  const deg = Math.round(ratio * 360)
+  return {
+    background: `conic-gradient(#37c78b ${deg}deg, #ecedf2 0deg)`
+  }
+})
+
+const macroPct = (value, goal) => {
+  const g = Math.max(1, Number(goal || 1))
+  return Math.max(0, Math.min(100, Math.round((Number(value || 0) / g) * 100)))
+}
+
+const loadProfile = async () => {
+  if (!userId) return
+  try {
+    const res = await API.get(`/profile/?user_id=${userId}`)
+    profile.value = {
+      gender: res.data.gender || 'female',
+      birthDate: res.data.birthDate || '',
+      height: Number(res.data.height || 0),
+      weight: Number(res.data.weight || 0),
+      targetWeight: Number(res.data.targetWeight || 0),
+      fatLossWeeks: Number(res.data.fatLossWeeks || 0),
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const loadDateTotals = async () => {
+  if (!userId || !selectedDate.value) return
+  try {
+    const res = await API.get(`/diet-log/?user_id=${userId}&date=${selectedDate.value}`)
+    const logs = res?.data?.logs || []
+    const sum = logs.reduce((acc, item) => {
+      acc.calories += Number(item.calories || 0)
+      acc.protein += Number(item.protein || 0)
+      acc.fat += Number(item.fat || 0)
+      acc.carbs += Number(item.carbs || 0)
+      return acc
+    }, { calories: 0, protein: 0, fat: 0, carbs: 0 })
+
+    dayTotals.value = {
+      calories: toInt(sum.calories),
+      protein: toInt(sum.protein),
+      fat: toInt(sum.fat),
+      carbs: toInt(sum.carbs)
+    }
+  } catch (e) {
+    console.error(e)
+    dayTotals.value = { calories: 0, protein: 0, fat: 0, carbs: 0 }
+  }
+}
+
+watch(selectedDate, () => {
+  loadDateTotals()
+})
+
+onMounted(async () => {
+  await loadProfile()
+  await loadDateTotals()
 })
 </script>
 
 <style scoped>
 .stats-view { width: 100%; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h2 { font-size: 22px; color: #2d3436; }
-.period-tabs { display: flex; gap: 6px; }
-.period-tabs button { padding: 7px 16px; border: 1px solid #dfe6e9; border-radius: 20px; background: #fff; font-size: 13px; cursor: pointer; color: #636e72; transition: .2s; }
-.period-tabs button.active { background: #7761e5; color: #fff; border-color: #7761e5; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.page-header h2 { margin: 0; font-size: 24px; color: #2c3348; }
+.header-tools label { font-size: 13px; color: #67717f; display: inline-flex; gap: 8px; align-items: center; }
+.header-tools input {
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
 
-.today-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
-.today-card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.04); display: flex; flex-direction: column; gap: 8px; }
-.tc-icon { font-size: 24px; }
-.tc-info { display: flex; align-items: baseline; gap: 6px; }
-.tc-value { font-size: 26px; font-weight: 700; color: #2d3436; }
-.tc-label { font-size: 13px; color: #b2bec3; }
-.tc-bar { height: 6px; background: #f0f2f5; border-radius: 3px; overflow: hidden; }
-.tc-fill { height: 100%; border-radius: 3px; transition: width .5s; }
-.tc-goal { font-size: 12px; color: #b2bec3; }
+.ring-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+.ring-card {
+  background: #fff;
+  border: 1px solid #e9edf3;
+  border-radius: 18px;
+  box-shadow: 0 8px 30px rgba(16, 24, 40, .05);
+  padding: 18px;
+}
+.ring-top { display: flex; justify-content: space-between; color: #637082; font-weight: 700; margin-bottom: 8px; }
+.ring-top strong { color: #2c3348; }
 
-.charts-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
-.charts-row:has(.wide) { grid-template-columns: 1fr; }
-.chart-card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
-.chart-card.wide { grid-column: 1 / -1; }
-.chart-card h3 { font-size: 15px; color: #2d3436; margin: 0 0 12px; }
-.chart-box { width: 100%; height: 320px; }
+.center-row {
+  display: grid;
+  grid-template-columns: 1fr 280px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.side-col { text-align: center; }
+.side-label { font-size: 14px; color: #637082; margin-bottom: 4px; font-weight: 700; }
+.side-value { font-size: 34px; color: #2c3348; font-weight: 800; }
+
+.ring-wrap { display: flex; justify-content: center; }
+.ring {
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ring-inner {
+  width: 212px;
+  height: 212px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #edf2f7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.ring-title { font-size: 20px; color: #637082; font-weight: 700; }
+.ring-value { font-size: 62px; line-height: 1; color: #242a3f; font-weight: 800; margin: 6px 0; }
+.ring-sub { font-size: 16px; color: #9aa3b2; font-weight: 600; }
+
+.macro-row { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.macro-item { padding: 10px; border-radius: 12px; background: #f8fafc; border: 1px solid #edf1f5; }
+.macro-name { color: #5f6a79; font-size: 14px; font-weight: 700; }
+.macro-num { margin-top: 4px; color: #8d97a5; font-size: 13px; }
+.macro-bar {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e6ebf1;
+}
+.macro-bar span { display: block; height: 100%; background: #3bc48b; border-radius: 999px; }
+
+.ring-card.info h3 { margin: 0 0 10px; font-size: 16px; color: #2c3348; }
+.ring-card.info ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.ring-card.info li { color: #5d6878; font-size: 13px; }
+
+@media (max-width: 1100px) {
+  .ring-grid { grid-template-columns: 1fr; }
+  .center-row { grid-template-columns: 1fr; }
+}
 </style>
