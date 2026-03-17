@@ -7,7 +7,6 @@
       </button>
     </div>
 
-    <!-- 筛选条件 -->
     <div class="filter-bar">
       <div class="filter-item">
         <label>热量上限</label>
@@ -36,7 +35,6 @@
       </div>
     </div>
 
-    <!-- 三餐推荐 -->
     <div v-if="loading" class="loading-state">正在为您智能配餐...</div>
     <div v-else class="meals-grid">
       <div v-for="section in mealSections" :key="section.key" class="meal-column">
@@ -65,14 +63,12 @@
           </div>
         </div>
 
-        <!-- 每餐小计 -->
         <div class="mc-subtotal" v-if="getFilteredRecipes(section.key).length > 0">
           小计：{{ getMealTotalCalories(section.key) }} kcal
         </div>
       </div>
     </div>
 
-    <!-- 导出的菜谱（来自AI对话） -->
     <div v-if="Object.keys(exportedMeals).length > 0" class="exported-section">
       <h3>AI 导出的菜谱</h3>
       <div v-for="(recipes, date) in exportedMeals" :key="date" class="exported-day">
@@ -97,7 +93,6 @@
       </div>
     </div>
 
-    <!-- 菜谱详情弹窗 -->
     <div v-if="showDetail" class="modal-overlay" @click.self="showDetail = false">
       <div class="detail-modal">
         <div class="dm-header">
@@ -180,7 +175,6 @@ const getLocalDateString = () => {
   return `${y}-${m}-${day}`
 }
 
-// 读取 AI 导出的菜谱，并从数据库补全缺失的营养信息
 const exportedMeals = ref({})
 const loadExportedMeals = async () => {
   const key = `diet_meals_${userId || 'guest'}`
@@ -188,7 +182,6 @@ const loadExportedMeals = async () => {
   if (!data) return
   const parsed = JSON.parse(data)
 
-  // 收集所有缺少营养信息的菜名
   const needLookup = []
   for (const date in parsed) {
     for (const r of parsed[date]) {
@@ -196,7 +189,6 @@ const loadExportedMeals = async () => {
     }
   }
 
-  // 批量查询数据库
   if (needLookup.length > 0) {
     try {
       const res = await API.post('/recipe/', { names: [...new Set(needLookup)] })
@@ -204,7 +196,6 @@ const loadExportedMeals = async () => {
       for (const item of (res.data.data || [])) {
         dbMap[item.name] = item
       }
-      // 回填营养数据并更新 localStorage
       for (const date in parsed) {
         for (const r of parsed[date]) {
           if ((!r.calories || r.calories === 0) && dbMap[r.name]) {

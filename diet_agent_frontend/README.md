@@ -1,44 +1,48 @@
-# diet-agent-frontend
+# Frontend (Vue 3)
 
-This template should help get you started developing with Vue 3 in Vite.
+## 作用
 
-## Recommended IDE Setup
+前端负责用户交互与可视化，包括聊天、食谱推荐、饮食记录、健康管理、健康日志、收藏等页面。
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 目录结构
 
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
+```text
+diet_agent_frontend/
+├── src/
+│   ├── App.vue
+│   ├── main.js
+│   ├── api.js
+│   ├── views/
+│   ├── router/
+│   └── utils/
+├── index.html
+├── vite.config.js
+└── package.json
 ```
 
-### Compile and Hot-Reload for Development
+## 运行
 
-```sh
+```bash
+npm install
 npm run dev
 ```
 
-### Compile and Minify for Production
+生产构建：
 
-```sh
+```bash
 npm run build
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## 开发规范
 
-```sh
-npm run lint
-```
+- 所有接口调用统一走 `src/api.js`。
+- 路由守卫统一在 `src/router/index.js`。
+- 复用逻辑优先放到 `src/utils/`。
+- 页面级状态优先本地维护，避免无效全局状态。
+
+## 模块文档
+
+- src 总览：[src/README.md](src/README.md)
+- 页面模块：[src/views/README.md](src/views/README.md)
+- 路由模块：[src/router/README.md](src/router/README.md)
+- 工具模块：[src/utils/README.md](src/utils/README.md)

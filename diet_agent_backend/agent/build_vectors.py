@@ -1,4 +1,3 @@
-# agent/build_vectors.py
 import os
 from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
@@ -6,11 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# 使用轻量级中文模型
 print("正在加载 Embedding 模型...")
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
-# 连接Neo4j
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 driver = GraphDatabase.driver(URI, auth=AUTH)
@@ -22,7 +19,6 @@ def generate_embedding(text):
 
 
 def create_vector_index(tx):
-    # 为Ingredient创建向量索引
     print("正在创建 Ingredient 向量索引...")
 
     tx.run("""
@@ -34,7 +30,6 @@ def create_vector_index(tx):
     }}
     """)
 
-    # 为Recipe创建向量索引
     print("正在创建 Recipe 向量索引...")
     tx.run("""
     CREATE VECTOR INDEX recipe_embedding_index IF NOT EXISTS
@@ -51,7 +46,6 @@ def update_embeddings(tx):
     result = tx.run("MATCH (i:Ingredient) WHERE i.embedding IS NULL RETURN i.name AS name")
     for record in result:
         name = record["name"]
-        # 向量化内容：名字+分类
         vector = generate_embedding(f"食材名称: {name}")
         if vector:
             tx.run("MATCH (i:Ingredient {name: $name}) SET i.embedding = $vector",

@@ -4,7 +4,6 @@
     <aside class="side-panel">
       <h3>个性化偏好</h3>
 
-      <!-- 模式切换 -->
       <div class="mode-block">
         <label class="mode-toggle" @click="toggleMode">
           <span class="mode-dot" :class="{ active: isWeightLossMode }"></span>
@@ -12,7 +11,6 @@
         </label>
       </div>
 
-      <!-- 偏好食材 -->
       <div class="fav-section">
         <h4>偏好食材 <span class="fav-hint">(会自动融入对话)</span></h4>
         <div class="tag-cloud">
@@ -27,7 +25,6 @@
         </div>
       </div>
 
-      <!-- 历史对话 -->
       <div class="history-section">
         <h4>历史对话</h4>
         <button class="new-chat-btn" @click="startNewChat">新对话</button>
@@ -38,7 +35,6 @@
         </div>
       </div>
 
-      <!-- 快捷问题 -->
       <div class="quick-section">
         <h4>快捷提问</h4>
         <button v-for="q in quickQuestions" :key="q" class="quick-btn" @click="askQuick(q)">{{ q }}</button>
@@ -78,7 +74,6 @@
               </button>
             </div>
 
-            <!-- 差评原因 -->
             <div v-if="msg.showReasons && !msg.feedbackSubmitted" class="reason-panel">
               <p>请选择不满意的菜品与原因（不会默认拉黑所有菜）：</p>
 
@@ -216,11 +211,9 @@ const parseAIResponse = (text) => {
   return { thinking: '', answer: text }
 }
 
-// 偏好食材
 const favorites = ref([])
 const newFav = ref('')
 
-// 历史对话
 const chatSessions = ref([])
 
 const quickQuestions = [
@@ -239,7 +232,6 @@ const reasonTypes = [
 
 const toggleMode = () => { isWeightLossMode.value = !isWeightLossMode.value }
 
-// 偏好食材 CRUD
 const loadFavorites = async () => {
   if (!userId.value) return
   try {
@@ -265,7 +257,6 @@ const removeFavorite = async (tag) => {
   }
 }
 
-// 历史对话
 const loadChatHistory = async () => {
   if (!userId.value) return
   try {
@@ -337,7 +328,6 @@ const buildEnrichedQuery = (text) => {
   return enriched
 }
 
-// 发送消息 —— 将偏好食材融入提问
 const sendMessage = async () => {
   const text = userInput.value.trim()
   if (!text || isLoading.value) return
@@ -365,7 +355,6 @@ const sendMessage = async () => {
       feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'dish', selectedIngredient: '', customReason: '',
       detectedRecipeNames: extractRecipeNames(answer || res.data.response || '')
     })
-    // 自动保存对话
     saveCurrentSession()
   } catch (e) {
     messages.value.push({ role: 'assistant', content: '[网络异常] 无法连接后端，请确认 Django 已启动。', feedback: null, showReasons: false, feedbackSubmitted: false, exported: false, feedbackRecipes: [], selectedRecipes: [], feedbackReasonType: 'other', selectedIngredient: '', customReason: '', detectedRecipeNames: [] })
@@ -384,7 +373,6 @@ const scrollBottom = async () => {
   if (chatWindowRef.value) chatWindowRef.value.scrollTop = chatWindowRef.value.scrollHeight
 }
 
-// 菜谱导出 —— 导出到 localStorage，RecipeView 会读取
 const extractRecipeNames = (text) => {
   const names = []
   const safeText = text || ''

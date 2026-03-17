@@ -1,4 +1,3 @@
-# agent/graph.py
 import re
 import json
 import os
@@ -20,7 +19,6 @@ from .mcp_tools import vector_search_recipe, get_food_nutrition, check_food_conf
 from .memory.manager import MemoryManager
 from .context import ContextBuilder
 
-# 状态定义
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     user_mode: str
@@ -28,7 +26,6 @@ class AgentState(TypedDict):
     user_profile: dict
     user_id: str
 
-# 模型与工具初始化
 llm = ChatOpenAI(
     base_url=os.getenv("OPENAI_API_BASE"),
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -45,7 +42,6 @@ openai_fns = [convert_to_openai_function(t) for t in tools]
 llm_with_tools = llm.bind(functions=openai_fns)
 
 
-# 核心节点
 def agent_node(state: AgentState):
     mode = state.get('user_mode', 'standard')
     profile = state.get('user_profile', {})
@@ -90,7 +86,6 @@ def agent_node(state: AgentState):
     return {"messages": [response]}
 
 
-# 反思节点
 def reflector_node(state: AgentState):
     mode = state.get('user_mode', 'standard')
     messages = state['messages']
@@ -119,7 +114,6 @@ def reflector_node(state: AgentState):
     return {"reflection_count": count}
 
 
-# 路由判断与构建
 def router(state: AgentState) -> Literal["tools", "reflector"]:
     last_msg = state['messages'][-1]
     if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:

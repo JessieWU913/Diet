@@ -15,11 +15,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-# diet_agent_backend/urls.py
 from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('agent.urls')), # 所有 agent 的接口都以 /api/ 开头
+    path('api/', include('agent.urls')),
 ]

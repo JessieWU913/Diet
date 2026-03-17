@@ -9,7 +9,6 @@
       </div>
     </div>
 
-    <!-- 搜索添加区 -->
     <div class="search-section">
       <div class="search-bar">
         <input v-model="searchQuery" @input="debounceSearch" placeholder="搜索食物，如：鸡蛋、米饭、西红柿炒蛋..." />
@@ -28,11 +27,9 @@
           <span class="si-add">+ 添加</span>
         </div>
       </div>
-      <!-- 手动添加按钮 -->
       <button class="manual-add-btn" @click="openManualAdd">手动添加食物</button>
     </div>
 
-    <!-- 今日记录 -->
     <div class="meal-grid">
       <div v-for="section in mealSections" :key="section.key" class="meal-section">
         <div class="ms-header">
@@ -75,7 +72,6 @@
       </div>
     </div>
 
-    <!-- 添加食物弹窗（搜索结果或手动新增） -->
     <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
       <div class="add-modal">
         <div class="am-header">
@@ -119,7 +115,6 @@
       </div>
     </div>
 
-    <!-- 菜品详情弹窗 -->
     <div v-if="showDetailModal" class="modal-overlay" @click.self="showDetailModal = false">
       <div class="detail-modal">
         <div class="dm-header">
@@ -173,11 +168,9 @@ const searchResults = ref([])
 const addMealType = ref('lunch')
 const logs = ref([])
 
-// 添加弹窗
 const showAddModal = ref(false)
 const addForm = ref({ food_name: '', manual_name: '', meal_type: 'lunch', calories: 0, protein: 0, fat: 0, carbs: 0 })
 
-// 详情弹窗
 const showDetailModal = ref(false)
 const detailItem = ref({})
 const detailRecipe = ref(null)
@@ -266,7 +259,6 @@ const openDetailModal = async (log) => {
       }
     }
 
-    // 如果 recipe 接口返回为空/缺失，尝试使用 recipe-detail 兜底。
     if (!detailRecipe.value) {
       const fullRes = await API.get(`/recipe-detail/?name=${encodeURIComponent(log.food_name)}`)
       const full = fullRes?.data?.data

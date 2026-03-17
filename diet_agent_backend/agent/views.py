@@ -254,10 +254,8 @@ def _ensure_user_id_constraint():
         )
         _user_id_constraint_ready = True
     except Exception as e:
-        # Do not block auth flow if constraint creation fails in restricted environments.
         print(f"WARNING: ensure user id constraint failed: {e}")
 
-# 用户注册与登录接口
 class UserAuthView(APIView):
     def post(self, request):
         _ensure_user_id_constraint()
@@ -272,7 +270,6 @@ class UserAuthView(APIView):
         if not user_id or not password:
             return Response({"error": "账号和密码不能为空"}, status=400)
 
-        # 注册账号仅允许字母、数字、短横杠、下划线
         if action == 'register' and not re.fullmatch(r"[A-Za-z0-9_-]+", user_id):
             return Response({"error": "User ID 仅允许字母、数字、短横杠(-)和下划线(_)"}, status=400)
 
@@ -319,7 +316,6 @@ class UserAuthView(APIView):
             if not db_password:
                 return Response({"error": "该账号是早期无密码账号，请重新注册"}, status=400)
 
-            # 确保拿出来的是纯字符串格式
             db_password_str = str(db_password)
 
             if check_password(password, db_password_str):
@@ -1364,7 +1360,6 @@ class AdminUserAuditView(APIView):
             "top_users": usage_rows,
         })
 
-# 用户资料填写接口
 class UserProfileView(APIView):
     def post(self, request):
         user_id = request.data.get("user_id")
@@ -1465,7 +1460,6 @@ class UserProfileView(APIView):
             print(f"读取个人中心失败: {e}")
             return Response({"error": str(e)}, status=500)
 
-# 聊天接口
 class AgentChatView(APIView):
     def post(self, request):
         user_query = request.data.get("query", "")
@@ -1491,7 +1485,6 @@ class AgentChatView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
-# 用户负面反馈收集接口
 class FeedbackView(APIView):
     def post(self, request):
         user_id = request.data.get("user_id")
@@ -1523,7 +1516,6 @@ class RecipeDetailView(APIView):
         if not names:
             return Response({"error": "未提供菜名"}, status=400)
 
-        # 1) 精确匹配
         exact_cypher = """
         MATCH (n:Recipe)
         WHERE n.name IN $names
@@ -1537,7 +1529,6 @@ class RecipeDetailView(APIView):
                'exact' AS source
         """
 
-        # 2) 模糊匹配（用于“名称不完全一致”场景）
         fuzzy_cypher = """
         MATCH (n:Recipe)
         WHERE toLower(n.name) CONTAINS toLower($name)
@@ -1559,7 +1550,6 @@ class RecipeDetailView(APIView):
 
             final_results = []
             for name in names:
-                # exact 命中
                 if name in exact_map:
                     item = exact_map[name]
                     if _is_blank_recipe_text(item.get("steps")) or _is_blank_recipe_text(item.get("ingredients")):
@@ -1581,7 +1571,6 @@ class RecipeDetailView(APIView):
                     final_results.append(item)
                     continue
 
-                # fuzzy 命中
                 fuzzy = graph_db.query(fuzzy_cypher, {"name": name})
                 if fuzzy:
                     f = fuzzy[0]
@@ -1619,7 +1608,6 @@ class RecipeDetailView(APIView):
                     final_results.append(fuzzy_item)
                     continue
 
-                # AI 补全
                 ai_item = _ai_complete_recipe(name)
                 if ai_item:
                     final_results.append(ai_item)
@@ -1642,8 +1630,8 @@ class RecipeDetailView(APIView):
 class MealEventView(APIView):
     def post(self, request):
         user_id = request.data.get("user_id")
-        date_str = request.data.get("date") # 比如 2026-03-06
-        recipe_names = request.data.get("recipe_names", []) # 传个数组 ['西红柿炒蛋', '米饭']
+        date_str = request.data.get("date")
+        recipe_names = request.data.get("recipe_names", [])
 
         success = EpisodicMemory.record_meal_event(user_id, recipe_names, date_str)
         if success:
@@ -1652,7 +1640,6 @@ class MealEventView(APIView):
 
     def get(self, request):
         user_id = request.query_params.get("user_id")
-        # 提取过去 14 天的记录发给前端
         history = EpisodicMemory.get_recent_meals(user_id, days_limit=14)
         return Response({"history": history})
 
@@ -1853,7 +1840,6 @@ class RecipeFullDetailView(APIView):
                 except Exception:
                     ingredients_detail = [{"raw_text": str(ingredients_raw)}]
 
-            # If raw field is absent or empty, fallback to graph relations.
             contains_rows = graph_db.query(contains_cypher, {"name": recipe_name})
             if (not ingredients_detail) and contains_rows:
                 ingredients_detail = [
@@ -1919,7 +1905,7 @@ class DietLogView(APIView):
     def post(self, request):
         user_id = request.data.get("user_id")
         date_str = request.data.get("date", datetime.now().strftime("%Y-%m-%d"))
-        meal_type = request.data.get("meal_type", "lunch")  # breakfast/lunch/dinner/snack
+        meal_type = request.data.get("meal_type", "lunch")
         food_name = request.data.get("food_name", "")
         calories = request.data.get("calories", 0)
         protein = request.data.get("protein", 0)

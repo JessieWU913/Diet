@@ -43,7 +43,7 @@
       <div class="sb-glow"></div>
       <div class="sb-head">
         <div>
-          <h3>时令食材展板</h3>
+          <h3>食材展板</h3>
           <p>{{ toneLine }}</p>
         </div>
         <button class="sb-refresh" @click="refreshBoard" :disabled="boardLoading">

@@ -33,13 +33,11 @@ def discover_neo4j_import_dirs() -> List[Path]:
     if env_dir:
         dirs.append(Path(env_dir).expanduser())
 
-    # Neo4j Desktop on macOS
     desktop_glob = Path.home() / "Library" / "Application Support" / "Neo4j Desktop" / "Application" / "relate-data" / "dbmss"
     if desktop_glob.exists():
         for p in desktop_glob.glob("*/import"):
             dirs.append(p)
 
-    # Common local/server installs
     dirs.extend(
         [
             Path("/opt/homebrew/var/neo4j/import"),
@@ -69,7 +67,6 @@ def resolve_data_file(path_or_name: str, import_dir: str = "") -> str:
     if p.is_absolute() and not p.is_file():
         raise FileNotFoundError(f"File not found: {p}")
 
-    # relative path: try cwd first
     cwd_candidate = Path.cwd() / p
     if cwd_candidate.is_file():
         return str(cwd_candidate)

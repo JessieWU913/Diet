@@ -98,7 +98,7 @@ class PromptTemplate:
     @classmethod
     def build_evidence_section(cls) -> str:
         """证据区块 — 由工具调用结果动态填充，初始为空提示"""
-        return ""  # 工具返回时由 LangGraph ToolMessage 自动注入
+        return ""
 
     @classmethod
     def build_context_section(cls, memory_prompt: str) -> str:

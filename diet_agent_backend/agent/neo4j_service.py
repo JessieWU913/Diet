@@ -1,4 +1,3 @@
-# agent/neo4j_service.py
 import os
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, ConfigurationError
@@ -30,7 +29,6 @@ class Neo4jService:
             if not uri:
                 raise ConfigurationError("NEO4J_URI 未配置，请检查 .env")
 
-            # 先按原 URI 连接；若路由信息不可获取（常见于单机实例），自动降级为 bolt 直连。
             try:
                 driver = GraphDatabase.driver(uri, auth=(user, password))
                 driver.verify_connectivity()

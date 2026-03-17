@@ -1,4 +1,3 @@
-# agent/mcp_tools.py
 from langchain_core.tools import tool
 from .neo4j_service import graph_db
 from sentence_transformers import SentenceTransformer
@@ -15,7 +14,6 @@ def web_search_tavily(query: str):
     """
     print(f"正在调用联网搜索 (DuckDuckGo): {query}")
     try:
-        # 直接调用DuckDuckGo
         return ddg_search.run(query)
     except Exception as e:
         return f"网络搜索超时或失败: {e}"
@@ -29,7 +27,6 @@ def get_food_nutrition(food_names: list[str]):
     """
     print(f"正在查询营养明细: {food_names}")
 
-    # 同时在Recipe和Ingredient标签中寻找
     cypher = """
     MATCH (n)
     WHERE (n:Recipe OR n:Ingredient)
@@ -66,7 +63,6 @@ def search_recipe_by_ingredients(ingredients: list[str], strict_mode: bool = Fal
         AND NOT n.name CONTAINS '拔丝' 
         AND NOT n.name CONTAINS '炸'
         """
-        # 给蛋白质极高的权重，脂肪扣分
         order_logic = "ORDER BY (n.protein * 5) - (n.fat * 3) - (n.calories * 0.2) DESC"
     else:
         strict_filter = "AND NOT n.name CONTAINS '拔丝'"

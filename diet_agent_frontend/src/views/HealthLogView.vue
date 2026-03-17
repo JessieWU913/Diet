@@ -26,7 +26,6 @@
         </div>
 
         <div class="day-content">
-          <!-- 饮食记录 -->
           <div v-if="group.dietLogs.length > 0" class="section-block">
             <div v-for="log in group.dietLogs" :key="log.id" class="log-item">
               <span class="li-icon">{{ mealIcon(log.meal_type) }}</span>
@@ -36,7 +35,6 @@
             </div>
           </div>
 
-          <!-- 事件记录 -->
           <div v-if="group.events.length > 0" class="section-block events-block">
             <div v-for="evt in group.events" :key="evt" class="event-item">
               <span class="ei-icon"></span>
@@ -47,7 +45,6 @@
       </div>
     </div>
 
-    <!-- 历史对话记录 -->
     <div class="chat-history-section">
       <h3>历史对话记录</h3>
       <div v-if="chatSessions.length === 0" class="ch-empty">暂无对话记录</div>
@@ -129,7 +126,6 @@ const groupedLogs = computed(() => {
 
   for (const evt of mealEvents.value) {
     const datePart = evt?.split('安排了:')[0]?.trim() || ''
-    // 尝试提取日期
     const dateMatch = datePart.match(/\d{4}-\d{2}-\d{2}/)
     const date = dateMatch ? dateMatch[0] : datePart
     if (date) {
@@ -154,7 +150,6 @@ const mealIcon = (type) => {
   return icons[type] || ''
 }
 
-// 历史对话
 const chatSessions = ref([])
 
 const loadChatHistory = async () => {

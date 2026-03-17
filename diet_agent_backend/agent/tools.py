@@ -1,4 +1,3 @@
-# agent/tools.py
 from langchain_core.tools import tool
 from .neo4j_service import graph_db
 
@@ -9,7 +8,6 @@ def search_recipe_by_ingredients(ingredients: list[str]):
     根据用户拥有的食材查询推荐食谱。
     输入示例: ['猪肉', '青椒']
     """
-    # 并按匹配度排序
     query = """
     MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
     WHERE i.name IN $ingredients

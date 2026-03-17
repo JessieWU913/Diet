@@ -11,7 +11,6 @@ class TokenBudget:
 
     def __init__(self, total_limit: int = 2048):
         self.total_limit = total_limit
-        # 各区块预算分配 (百分比)
         self.allocations = {
             "role":     0.10,
             "task":     0.05,
@@ -27,7 +26,6 @@ class TokenBudget:
             return 0
         chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
         non_chinese = len(text) - chinese_chars
-        # 英文部分按字符/4 近似 word count
         return int(chinese_chars * 1.5 + non_chinese * 0.4)
 
     def get_budget(self, section: str) -> int:
@@ -42,7 +40,6 @@ class TokenBudget:
         if current <= budget:
             return text
 
-        # 按比例截断，保留后半部分
         ratio = budget / max(current, 1)
         keep_chars = int(len(text) * ratio)
         return "...(已压缩)\n" + text[-keep_chars:]

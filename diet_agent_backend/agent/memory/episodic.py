@@ -1,4 +1,3 @@
-# agent/memory/episodic.py
 from agent.neo4j_service import graph_db
 from datetime import datetime
 
@@ -22,12 +21,10 @@ class EpisodicMemory:
 
         cypher = """
         MATCH (u:User {id: $user_id})
-        // 1. 创建当天的饮食事件节点
         MERGE (e:Event {user_id: $user_id, date: $date, type: 'daily_meal'})
         MERGE (u)-[:HAS_EVENT]->(e)
 
         WITH e
-        // 2. 将推荐的菜品与事件节点相连
         UNWIND $recipe_names AS recipe_name
         MATCH (r:Recipe {name: recipe_name})
         MERGE (e)-[:ATE]->(r)

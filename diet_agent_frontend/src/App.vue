@@ -142,7 +142,7 @@
           </div>
 
           <div class="pm-actions">
-            <button class="pm-save" @click="saveProfile" :disabled="saving">{{ saving ? '保存中...' : '💾 保存' }}</button>
+            <button class="pm-save" @click="saveProfile" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
             <button class="pm-logout" @click="logout">退出登录</button>
           </div>
         </div>
