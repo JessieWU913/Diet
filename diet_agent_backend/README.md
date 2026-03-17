@@ -24,3 +24,4 @@ python manage.py runserver
 
 - 生产环境不要提交真实 `db.sqlite3`。
 - `.env` 存放 Neo4j 与模型服务配置，不要入库。
+- 当 `NEO4J_AUTO_INIT=true` 时，后端会在连接 Neo4j 后自动从 `neo4j_data/` 做去重导入。

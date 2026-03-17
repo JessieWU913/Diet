@@ -37,7 +37,7 @@ diet_agent/
 - 前端：Vue 3, Vue Router, Vite, Axios, ECharts, lucide-vue-next
 - 后端：Django, Django REST Framework, django-cors-headers
 - 图数据库：Neo4j
-- LLM 相关：langchain-openai, langchain-core
+- LLM 相关：langchain-openai, langchain-core, langgraph
 
 ## 3. 环境与依赖
 
@@ -52,9 +52,16 @@ pip install django djangorestframework django-cors-headers neo4j python-dotenv l
 创建 `diet_agent_backend/.env`（示例）：
 
 ```env
-NEO4J_URI=bolt://127.0.0.1:7687
+NEO4J_URI=your_neo4j_url
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
+NEO4J_AUTO_INIT=true
+# 可选：不填则自动使用仓库根目录 neo4j_data
+# NEO4J_DATA_DIR=/absolute/path/to/neo4j_data
+# 可选：强制重新全量导入一次（默认 false）
+NEO4J_FORCE_REIMPORT=false
+# 可选：手动指定导入版本号，不填则按数据文件指纹自动计算
+# NEO4J_BOOTSTRAP_VERSION=v1
 
 OPENAI_API_BASE=your_base_url
 OPENAI_API_KEY=your_api_key
@@ -63,6 +70,12 @@ LLM_MODEL_NAME=your_model_name
 ADMIN_DEFAULT_ID=admin
 ADMIN_DEFAULT_PASSWORD=123
 ```
+
+Neo4j 自动初始化说明：
+
+- 项目启动时会自动检查 `neo4j_data/` 中的数据文件，并在首次运行或数据版本变化时执行全量 `upsert` 导入。
+- 导入包含食材与食谱的完整属性（含 `nutrients_raw`、`ingredients_raw`、`steps_raw`、`raw_json`），并通过唯一约束与 `MERGE` 去重。
+- 若已导入且版本未变化，后续启动会自动跳过，不重复导入。
 
 ### 3.2 前端（Node 20+）
 
@@ -124,13 +137,7 @@ npm run dev
 - 路由模块：[diet_agent_frontend/src/router/README.md](diet_agent_frontend/src/router/README.md)
 - 工具模块：[diet_agent_frontend/src/utils/README.md](diet_agent_frontend/src/utils/README.md)
 
-## 7. 提交导师前建议
-
-- 确保 `.env`、数据库文件、`node_modules` 未被打包给导师。
-- 可附一份演示流程：登录 -> AI 导出菜谱 -> 记录饮食 -> 健康管理查看摄入变化。
-- 如需论文/答辩展示，建议补一张模块架构图和一张 API 时序图。
-
-## 8. 导师交付专用文档包
+## 7. 说明
 
 - 系统架构图说明模板：[docs/mentor/01_system_architecture_template.md](docs/mentor/01_system_architecture_template.md)
 - API 清单模板：[docs/mentor/02_api_inventory_template.md](docs/mentor/02_api_inventory_template.md)

@@ -2,6 +2,7 @@ import os
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, ConfigurationError
 from dotenv import load_dotenv
+from .neo4j_bootstrap import Neo4jBootstrap
 
 load_dotenv()
 
@@ -41,6 +42,10 @@ class Neo4jService:
                 driver.verify_connectivity()
 
             cls._instance.driver = driver
+            try:
+                Neo4jBootstrap(driver).run_if_needed()
+            except Exception as e:
+                print(f"Neo4j 自动初始化失败: {e}")
         return cls._instance
 
     def close(self):
